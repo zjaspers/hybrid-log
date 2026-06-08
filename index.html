@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hybrid Log</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Hybrid Athlete</p>
+        <h1>Hybrid Log</h1>
+      </div>
+      <button id="logoutBtn" class="secondary hidden">Log Out</button>
+    </header>
+
+    <section id="setupWarning" class="warning hidden">
+      Add your Supabase URL and anon key in <strong>app.js</strong> before using the app.
+    </section>
+
+    <section id="authView" class="card">
+      <h2>Login</h2>
+      <p class="muted">Use email and password. Supabase stores your training memory week to week.</p>
+      <label>Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@email.com" />
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Password" />
+      <div class="button-row">
+        <button id="loginBtn">Log In</button>
+        <button id="signupBtn" class="secondary">Create Account</button>
+      </div>
+      <p id="authMessage" class="message"></p>
+    </section>
+
+    <section id="appView" class="hidden">
+      <section class="grid two">
+        <div class="card">
+          <p class="eyebrow">Today</p>
+          <h2 id="todayTitle">Loading...</h2>
+          <p id="todayDetails" class="muted"></p>
+          <p id="cycleLabel" class="pill"></p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">Coach Rules</p>
+          <ul class="tight-list">
+            <li>No makeup workouts.</li>
+            <li>Zone 2 = conversational.</li>
+            <li>Progress only when reps are owned.</li>
+          </ul>
+        </div>
+      </section>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="logTab">Log</button>
+        <button class="tab" data-tab="runTab">Run</button>
+        <button class="tab" data-tab="checkinTab">Check-In</button>
+        <button class="tab" data-tab="progressTab">Progress</button>
+        <button class="tab" data-tab="historyTab">History</button>
+      </nav>
+
+      <section id="logTab" class="tab-panel card">
+        <h2>Log Workout</h2>
+        <label>Workout Type</label>
+        <select id="workoutType">
+          <option>Workout A</option>
+          <option>Workout B</option>
+          <option>Run</option>
+          <option>Rest</option>
+          <option>Baseball</option>
+        </select>
+
+        <label>Exercise</label>
+        <select id="exerciseName">
+          <option>Back Squat</option>
+          <option>Deadlift</option>
+          <option>Clean and Press</option>
+          <option>Standing Shoulder Press</option>
+          <option>Romanian Deadlift</option>
+          <option>Incline Dumbbell Press</option>
+          <option>Hammer Curl</option>
+          <option>Bench Press</option>
+          <option>Front Squat</option>
+          <option>Pull-Ups</option>
+          <option>Dips</option>
+          <option>Curl Variation</option>
+          <option>Triceps Variation</option>
+          <option>Core</option>
+        </select>
+
+        <div class="grid two">
+          <div>
+            <label>Weight</label>
+            <input id="weight" type="number" step="2.5" placeholder="85" />
+          </div>
+          <div>
+            <label>RPE</label>
+            <input id="rpe" type="number" step="0.5" min="1" max="10" placeholder="8" />
+          </div>
+        </div>
+
+        <label>Reps per set</label>
+        <input id="reps" type="text" placeholder="5,5,4" />
+
+        <label>Notes</label>
+        <textarea id="workoutNotes" placeholder="How did it feel?"></textarea>
+
+        <button id="saveWorkoutBtn">Save Workout</button>
+        <p id="workoutMessage" class="message"></p>
+      </section>
+
+      <section id="runTab" class="tab-panel card hidden">
+        <h2>Log Zone 2 / Baseball</h2>
+        <label>Run Type</label>
+        <select id="runType">
+          <option>Zone 2</option>
+          <option>Post-Lift Zone 2</option>
+          <option>Baseball/Sprints</option>
+          <option>Walk</option>
+        </select>
+        <div class="grid two">
+          <div>
+            <label>Target Minutes</label>
+            <input id="targetMinutes" type="number" placeholder="15" />
+          </div>
+          <div>
+            <label>Completed Minutes</label>
+            <input id="completedMinutes" type="number" placeholder="12" />
+          </div>
+        </div>
+        <label>RPE</label>
+        <input id="runRpe" type="number" min="1" max="10" step="0.5" placeholder="4" />
+        <label>Notes</label>
+        <textarea id="runNotes" placeholder="Conversational? legs heavy?"></textarea>
+        <button id="saveRunBtn">Save Run</button>
+        <p id="runMessage" class="message"></p>
+      </section>
+
+      <section id="checkinTab" class="tab-panel card hidden">
+        <h2>Weekly Check-In</h2>
+        <div class="grid two">
+          <div>
+            <label>Body Weight</label>
+            <input id="bodyWeight" type="number" step="0.1" placeholder="158" />
+          </div>
+          <div>
+            <label>Waist</label>
+            <input id="waist" type="number" step="0.25" placeholder="33" />
+          </div>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Lifts Completed / 3</label>
+            <input id="liftsCompleted" type="number" min="0" max="3" placeholder="3" />
+          </div>
+          <div>
+            <label>Runs Completed / 4</label>
+            <input id="runsCompleted" type="number" min="0" max="4" placeholder="4" />
+          </div>
+        </div>
+        <label>Protein</label>
+        <select id="proteinRating"><option>Good</option><option>OK</option><option>Bad</option></select>
+        <label>Recovery</label>
+        <select id="recoveryRating"><option>Good</option><option>OK</option><option>Bad</option></select>
+        <label>Notes</label>
+        <textarea id="checkinNotes" placeholder="Sleep, stress, alcohol, soreness..."></textarea>
+        <button id="saveCheckinBtn">Save Check-In</button>
+        <p id="checkinMessage" class="message"></p>
+      </section>
+
+      <section id="progressTab" class="tab-panel hidden">
+        <div class="card">
+          <h2>Lift Progression</h2>
+          <div id="progressList"></div>
+        </div>
+      </section>
+
+      <section id="historyTab" class="tab-panel hidden">
+        <div class="card">
+          <h2>Recent History</h2>
+          <div id="historyList"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
