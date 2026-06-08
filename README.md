@@ -1,31 +1,16 @@
-# Hybrid Log
+# Hybrid Log v2
 
-A mobile-first GitHub Pages app for tracking hybrid training with Supabase login and week-to-week memory.
+GitHub Pages + Supabase personal hybrid training app.
 
-## Stack
+## Update steps
+1. Copy your Supabase URL and anon public key from your current app.js.
+2. Replace the placeholders in this app.js with those values.
+3. Upload/replace index.html, style.css, and app.js in your GitHub repo root.
+4. In Supabase SQL Editor, run supabase-migration-v2.sql.
+5. Wait for GitHub Pages to rebuild, then refresh your site.
 
-- GitHub Pages: hosts the app
-- Supabase Auth: login
-- Supabase Postgres: workout memory
-- Plain HTML/CSS/JavaScript
-
-## Files
-
-- `index.html` app structure
-- `style.css` mobile-first design
-- `app.js` app logic and Supabase connection
-- `supabase.sql` database tables and row-level security policies
-
-## Setup
-
-1. Create a Supabase project.
-2. Run `supabase.sql` in Supabase SQL Editor.
-3. In `app.js`, replace:
-   - `PASTE_YOUR_SUPABASE_PROJECT_URL_HERE`
-   - `PASTE_YOUR_SUPABASE_ANON_PUBLIC_KEY_HERE`
-4. Push files to GitHub.
-5. Enable GitHub Pages: Settings → Pages → Deploy from branch → main → root.
-
-## Important
-
-Use only the Supabase anon public key in app.js. Never use the service role key in a browser app.
+## Notes
+- This version uses a white Cal.ai-inspired mobile layout.
+- Workout A/B are shown as full exercise cards, not dropdowns.
+- Each exercise has per-set weight, reps, and RPE.
+- You can add or remove sets.
