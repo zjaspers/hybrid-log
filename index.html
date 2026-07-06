@@ -12,22 +12,18 @@
     <header class="topbar">
       <div>
         <h1>Hybrid OS</h1>
-        <p class="muted">Strength + Zone 2</p>
+        <p class="muted">Hybrid Athlete OS V2.0</p>
       </div>
       <button id="logoutBtn" class="ghost hidden">Log out</button>
     </header>
 
-    <section id="setupWarning" class="notice hidden">
-      Supabase is not configured. Add your project URL and anon key to app.js.
-    </section>
+    <section id="setupWarning" class="notice hidden">Supabase is not configured. Add your project URL and anon key to app.js.</section>
 
     <section id="authView" class="auth-card hidden">
       <h2>Log in</h2>
       <p class="muted small">Your workouts save to Supabase.</p>
-      <label>Email</label>
-      <input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
-      <label>Password</label>
-      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+      <label>Email</label><input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
+      <label>Password</label><input id="password" type="password" placeholder="Password" autocomplete="current-password" />
       <button id="loginBtn" class="primary">Log in</button>
       <button id="signupBtn" class="secondary">Create account</button>
       <p id="authMessage" class="small"></p>
@@ -47,16 +43,18 @@
           <div class="today-meta">
             <span id="cycleLabel">Week 1</span>
             <span id="cycleType">Build</span>
-            <span id="runTarget">10–15 Zone 2</span>
+            <span id="todayStatus">Planned</span>
           </div>
-          <button id="startWorkoutBtn" class="primary">Start workout</button>
+          <button id="startWorkoutBtn" class="primary">Start selected day</button>
         </article>
+
+        <div id="v2Mission"></div>
 
         <article class="swap-card">
           <div class="section-title-row compact-row">
             <div>
-              <h3>Need to change today?</h3>
-              <p class="muted small">Pick a different session and rebalance the week.</p>
+              <h3 id="changeHeading">Change selected day</h3>
+              <p class="muted small">You can edit any uncompleted day, including yesterday. Completed days are locked.</p>
             </div>
           </div>
           <div class="quick-switch">
@@ -70,7 +68,7 @@
 
         <section class="section-title-row">
           <h2>This week</h2>
-          <button id="resetWeekBtn" class="ghost">Reset</button>
+          <button id="resetWeekBtn" class="ghost">Reset unlocked</button>
         </section>
         <div id="weeklyPlan" class="weekly-plan"></div>
       </section>
@@ -83,7 +81,7 @@
         <div id="workoutBuilder"></div>
         <label>Workout notes</label>
         <textarea id="workoutNotes" placeholder="How did it feel?"></textarea>
-        <button id="saveWorkoutBtn" class="primary">Save workout</button>
+        <button id="saveWorkoutBtn" class="primary">Save + lock day complete</button>
         <p id="workoutMessage" class="small"></p>
       </section>
 
@@ -93,16 +91,9 @@
         <div id="progressList"></div>
       </section>
 
-      <section id="cyclePanel" class="panel hidden">
-        <h2>8-week cycle</h2>
-        <p class="muted small" id="weekSummary"></p>
-        <div id="cycleGrid" class="cycle-grid"></div>
-        <div id="cycleDetails" class="info-card"></div>
-      </section>
-
       <section id="checkinPanel" class="panel hidden">
         <h2>Check-in</h2>
-        <p class="muted small">Lift/run totals are calculated from saved workouts this week.</p>
+        <p class="muted small">Lift/run totals are calculated from completed schedule + saved workouts this week.</p>
         <div class="mini-grid two">
           <article class="mini-card"><p class="metric-label">Lifts</p><h3 id="autoLifts">0/3</h3></article>
           <article class="mini-card"><p class="metric-label">Runs</p><h3 id="autoRuns">0/4</h3></article>
@@ -111,6 +102,12 @@
           <div><label>Body weight</label><input id="bodyWeight" type="number" step="0.1" /></div>
           <div><label>Waist</label><input id="waist" type="number" step="0.1" /></div>
         </div>
+        <div class="input-grid two">
+          <div><label>Arm measurement</label><input id="armMeasurement" type="number" step="0.1" placeholder="flexed" /></div>
+          <div><label>Zone 2 pace</label><input id="zone2Pace" type="text" placeholder="ex: 12:30/mi" /></div>
+        </div>
+        <label>Front photo note</label><input id="frontPhotoNote" type="text" placeholder="Saved in Photos / optional note" />
+        <label>Side photo note</label><input id="sidePhotoNote" type="text" placeholder="Saved in Photos / optional note" />
         <label>Protein</label><select id="proteinRating"><option>Good</option><option>OK</option><option>Bad</option></select>
         <label>Recovery</label><select id="recoveryRating"><option>Good</option><option>OK</option><option>Bad</option></select>
         <label>Notes</label><textarea id="checkinNotes"></textarea>
@@ -120,6 +117,11 @@
 
       <section id="profilePanel" class="panel hidden">
         <h2>Profile</h2>
+        <article class="info-card">
+          <h3>V2.0 rules</h3>
+          <p class="muted small">Commit for 12–16 weeks. Compounds first, Zone 2 non-negotiable, direct arm/shoulder work programmed every lift.</p>
+          <div class="progress-decision">Never miss Zone 2 · Never skip direct arms · Always progress compounds</div>
+        </article>
         <p class="muted small">Use equipment mode for travel weeks.</p>
         <label>Available equipment</label>
         <select id="equipmentMode">
@@ -130,6 +132,34 @@
         </select>
         <button id="savePrefsBtn" class="primary">Save equipment</button>
         <p id="prefsMessage" class="small"></p>
+
+        <div class="profile-divider"></div>
+        <h2>Program period</h2>
+        <p class="muted small">The cycle no longer advances just because calendar weeks pass. It advances only when you log enough lift workouts, or when you manually reset it here.</p>
+        <article class="info-card">
+          <p id="programStatus" class="small">Loading program status...</p>
+        </article>
+        <label>Current program week</label>
+        <select id="programWeekSelect">
+          <option value="1">Week 1 — Establish</option>
+          <option value="2">Week 2 — Add</option>
+          <option value="3">Week 3 — Push</option>
+          <option value="4">Week 4 — Deload</option>
+          <option value="5">Week 5 — Rebuild</option>
+          <option value="6">Week 6 — Add</option>
+          <option value="7">Week 7 — Peak</option>
+          <option value="8">Week 8 — Deload</option>
+        </select>
+        <label>Advance rule</label>
+        <select id="advanceMode">
+          <option value="completed_lifts">Advance after enough completed lifts</option>
+          <option value="manual">Manual only</option>
+        </select>
+        <label>Lifts required to advance</label>
+        <input id="liftsRequired" type="number" min="1" max="5" value="3" />
+        <button id="saveProgramBtn" class="primary">Reset / save program week</button>
+        <button id="advanceProgramBtn" class="secondary">Advance one week now</button>
+        <p id="programMessage" class="small"></p>
       </section>
 
       <section id="historyPanel" class="panel hidden">
