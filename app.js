@@ -1,335 +1,200 @@
-// Hybrid OS v9 — V2.0 hybrid athlete operating system
+// Hybrid Log v10 — reliable daily workout loop
 const SUPABASE_URL = "https://nlsnycwlmoukxgojrkpe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sc255Y3dsbW91a3hnb2pya3BlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MzQ5NjIsImV4cCI6MjA5NjUxMDk2Mn0.Q_5R8vel8YmExTY3ztk3toHBuW1xLKUjVFzKeBbIwE4";
 
-const appConfigured = !SUPABASE_URL.includes("PASTE_") && !SUPABASE_ANON_KEY.includes("PASTE_");
+const appConfigured = SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes("PASTE_") && !SUPABASE_ANON_KEY.includes("PASTE_");
 const supabaseClient = appConfigured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let currentUser = null;
-let selectedDate = localDateISO(new Date());
-let selectedPlan = "Workout A";
-let currentWeekPlan = [];
-let baselines = {};
+let currentWorkout = "Workout A";
 let equipmentMode = "full";
-let programState = { active_week: 1, advance_mode: "completed_lifts", lifts_required: 3, week_started_at: null };
+let programSettings = { current_week: 1, advance_after_lifts: "3", lift_count_this_program_week: 0 };
+let baselines = {};
+let pendingAction = localStorage.getItem("pendingAction") || null;
+let weekSchedule = [];
 
-const id = (x) => document.getElementById(x);
+const $ = (id) => document.getElementById(id);
 const els = {
-  setupWarning:id("setupWarning"), authView:id("authView"), appView:id("appView"), bottomNav:id("bottomNav"), logoutBtn:id("logoutBtn"),
-  authMessage:id("authMessage"), todayDateLabel:id("todayDateLabel"), todayTitle:id("todayTitle"), todayDetails:id("todayDetails"),
-  todayStatus:id("todayStatus"), cycleRing:id("cycleRing"), cycleLabel:id("cycleLabel"), cycleType:id("cycleType"), weeklyPlan:id("weeklyPlan"),
-  swapMessage:id("swapMessage"), changeHeading:id("changeHeading"), planHeading:id("planHeading"), equipmentLabel:id("equipmentLabel"), workoutBuilder:id("workoutBuilder"),
-  workoutMessage:id("workoutMessage"), progressList:id("progressList"), autoLifts:id("autoLifts"), autoRuns:id("autoRuns"), checkinMessage:id("checkinMessage"),
-  prefsMessage:id("prefsMessage"), historyList:id("historyList"), equipmentMode:id("equipmentMode"), programWeekSelect:id("programWeekSelect"), advanceMode:id("advanceMode"), liftsRequired:id("liftsRequired"), programMessage:id("programMessage"), programStatus:id("programStatus")
+  toast: $("toast"), setupWarning: $("setupWarning"), authView: $("authView"), appView: $("appView"), bottomNav: $("bottomNav"),
+  logoutBtn: $("logoutBtn"), authMessage: $("authMessage"), dateLine: $("dateLine"), todayWorkoutName: $("todayWorkoutName"), todayWorkoutDetails: $("todayWorkoutDetails"),
+  cycleRing: $("cycleRing"), recommendationTitle: $("recommendationTitle"), recommendationReason: $("recommendationReason"), weeklyPlanList: $("weeklyPlanList"),
+  sessionTitle: $("sessionTitle"), sessionSubtitle: $("sessionSubtitle"), sessionExercises: $("sessionExercises"), sessionMessage: $("sessionMessage"),
+  progressList: $("progressList"), liftsAuto: $("liftsAuto"), runsAuto: $("runsAuto"), checkinMessage: $("checkinMessage"), equipmentMode: $("equipmentMode"),
+  programWeek: $("programWeek"), advanceAfterLifts: $("advanceAfterLifts")
 };
 
 const baseTemplates = {
   "Workout A": [
-    { name:"Back Squat", note:"Primary compound. 3x5, RPE 7–8. Never sacrifice progression.", sets:3, target:"3x5", defaultWeight:"", group:"main" },
-    { name:"Clean and Press", note:"Standing press priority. Double progression. Stay at 85 until 5/5/5.", sets:3, target:"3x5", defaultWeight:85, group:"main" },
-    { name:"Romanian Deadlift", note:"Controlled hinge. Hamstrings/glutes. Do not chase failure.", sets:3, target:"3x8", defaultWeight:"", group:"main" },
-    { name:"Incline Dumbbell Press", note:"Upper chest priority. Shoulder blades down/back.", sets:3, target:"3x8–10", defaultWeight:"", group:"upper" },
-    { name:"Lateral Raise", note:"Shoulders/glamour work. Clean reps, no swinging.", sets:3, target:"3x12–15", defaultWeight:"", group:"accessory" },
-    { name:"Hammer Curl", note:"Biceps 1 of 2. Quality arm work is programmed, not optional.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Incline Curl", note:"Biceps 2 of 2. Full stretch, controlled reps.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Rope Pushdown", note:"Triceps 1 of 2. Controlled lockout.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Overhead Triceps Extension", note:"Triceps 2 of 2. Long-head emphasis.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Zone 2 Run", note:"Post-lift: non-negotiable. Conversational pace. Pace does not matter.", sets:1, target:"15–20 min", isRun:true, defaultWeight:20 }
+    { name: "Back Squat", note: "Primary compound. RPE 7–8.", sets: 3, reps: 5, target: "3x5", type: "lift", defaultWeight: "" },
+    { name: "Clean and Press", note: "Double progression. Stay until 5/5/5.", sets: 3, reps: 5, target: "3x5", type: "lift", defaultWeight: 85 },
+    { name: "Romanian Deadlift", note: "Controlled hinge. No failure.", sets: 2, reps: 8, target: "2x8", type: "lift", defaultWeight: "" },
+    { name: "Incline Dumbbell Press", note: "Upper chest priority.", sets: 2, reps: 10, target: "2x10", type: "lift", defaultWeight: "" },
+    { name: "Hammer Curl", note: "Direct biceps. Quality reps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Incline Curl", note: "Second biceps exercise.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Rope Pushdown", note: "Direct triceps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Overhead Triceps Extension", note: "Long head triceps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Lateral Raise", note: "Shoulder cap. Clean reps.", sets: 3, reps: 15, target: "3x12–15", type: "accessory", defaultWeight: "" },
+    { name: "Zone 2 Run", note: "Conversational pace.", sets: 1, reps: 20, target: "15–20 min", type: "run", defaultWeight: 20 }
   ],
   "Workout B": [
-    { name:"Bench Press", note:"Primary compound. Face pulls + dead bugs first.", sets:3, target:"3x5", defaultWeight:"", group:"main" },
-    { name:"Front Squat", note:"Secondary compound. Clean reps, upright torso.", sets:3, target:"3x5", defaultWeight:"", group:"main" },
-    { name:"Pull-Ups", note:"Primary pull. Bodyweight or assisted. Track reps.", sets:3, target:"3 sets", defaultWeight:0, group:"main" },
-    { name:"Dips", note:"Primary push. Add weight only when reps are owned.", sets:3, target:"3 sets", defaultWeight:0, group:"main" },
-    { name:"Incline Dumbbell Press", note:"Upper chest stays a priority.", sets:2, target:"2x8–10", defaultWeight:"", group:"upper" },
-    { name:"Lateral Raise", note:"Shoulders every upper workout.", sets:3, target:"3x12–15", defaultWeight:"", group:"accessory" },
-    { name:"Rear Delt Fly", note:"Rear delts/scapular balance. Optional if time is crushed.", sets:2, target:"2x12–15", defaultWeight:"", group:"accessory" },
-    { name:"EZ Curl", note:"Biceps 1 of 2. Quality arm work is programmed.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Hammer Curl", note:"Biceps 2 of 2. Clean reps.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Rope Pushdown", note:"Triceps 1 of 2. Controlled lockout.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Skull Crusher", note:"Triceps 2 of 2. Use pain-free ROM.", sets:3, target:"3x10–12", defaultWeight:"", group:"accessory" },
-    { name:"Zone 2 Run", note:"Post-lift: non-negotiable. Conversational pace.", sets:1, target:"15–20 min", isRun:true, defaultWeight:20 }
+    { name: "Bench Press", note: "Primary compound. Face pulls/dead bugs first.", sets: 3, reps: 5, target: "3x5", type: "lift", defaultWeight: "" },
+    { name: "Front Squat", note: "Secondary compound.", sets: 3, reps: 5, target: "3x5", type: "lift", defaultWeight: "" },
+    { name: "Pull-Ups", note: "Stop 1–2 reps before failure.", sets: 3, reps: 6, target: "3 sets", type: "lift", defaultWeight: 0 },
+    { name: "Dips", note: "Controlled reps.", sets: 3, reps: 8, target: "2–3 sets", type: "lift", defaultWeight: 0 },
+    { name: "Incline Dumbbell Press", note: "Upper chest priority.", sets: 2, reps: 10, target: "2x10", type: "lift", defaultWeight: "" },
+    { name: "Hammer Curl", note: "Direct biceps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "EZ Curl", note: "Second biceps exercise.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Skull Crusher", note: "Direct triceps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Overhead Triceps Extension", note: "Long head triceps.", sets: 3, reps: 12, target: "3x10–12", type: "accessory", defaultWeight: "" },
+    { name: "Lateral Raise", note: "Every upper workout.", sets: 3, reps: 15, target: "3x12–15", type: "accessory", defaultWeight: "" },
+    { name: "Rear Delt Fly", note: "Optional rear delt/posture work.", sets: 2, reps: 15, target: "2x15", type: "accessory", defaultWeight: "" },
+    { name: "Zone 2 Run", note: "Conversational pace.", sets: 1, reps: 20, target: "15–20 min", type: "run", defaultWeight: 20 }
   ],
-  "Run": [{ name:"Zone 2 Run", note:"RPE 4–5. Complete the session and stay in Zone 2. Pace does not matter.", sets:1, target:"20–30 min", isRun:true, defaultWeight:30 }],
-  "Rest": [{ name:"Walk / Mobility", note:"Recovery, walking, family time. Optional mobility.", sets:1, target:"Optional", isRun:true, defaultWeight:0 }]
+  "Zone 2": [
+    { name: "Zone 2 Run", note: "RPE 4–5. Track minutes, not pace.", sets: 1, reps: 30, target: "20–30 min", type: "run", defaultWeight: 30 }
+  ],
+  "Recovery": [
+    { name: "Walk / Mobility", note: "Family walk, easy movement, no required intensity.", sets: 1, reps: 20, target: "Optional", type: "run", defaultWeight: 20 }
+  ],
+  "Minimum Viable": [
+    { name: "Primary Compound", note: "One big lift or closest travel substitute.", sets: 3, reps: 5, target: "3x5", type: "lift", defaultWeight: "" },
+    { name: "Push/Pull Superset", note: "Dumbbell press + row or push-ups + pull-ups.", sets: 3, reps: 10, target: "3x10", type: "accessory", defaultWeight: "" },
+    { name: "Arm Finisher", note: "One biceps + one triceps movement.", sets: 4, reps: 12, target: "4 sets", type: "accessory", defaultWeight: "" },
+    { name: "Zone 2 Run", note: "If time allows.", sets: 1, reps: 10, target: "10 min", type: "run", defaultWeight: 10 }
+  ]
 };
 
 const substitutions = {
-  hotel: {"Back Squat":"Goblet Squat","Clean and Press":"DB Clean + Push Press","Romanian Deadlift":"DB Romanian Deadlift","Bench Press":"DB Bench Press","Front Squat":"Goblet Front Squat","Pull-Ups":"Lat Pulldown / Cable Row","Dips":"DB Floor Press","Lateral Raise":"DB Lateral Raise","Rear Delt Fly":"DB Rear Delt Fly","Rope Pushdown":"Cable Pushdown","Overhead Triceps Extension":"DB Overhead Triceps Extension","Skull Crusher":"DB Skull Crusher"},
-  dumbbells: {"Back Squat":"DB Goblet Squat","Clean and Press":"DB Clean + Press","Romanian Deadlift":"DB Romanian Deadlift","Bench Press":"DB Floor Press","Front Squat":"DB Front Squat","Pull-Ups":"1-Arm DB Row","Dips":"Close-Grip Push-Up","Lateral Raise":"DB Lateral Raise","Rear Delt Fly":"DB Rear Delt Fly","Rope Pushdown":"DB Triceps Kickback","Overhead Triceps Extension":"DB Overhead Triceps Extension","Skull Crusher":"DB Skull Crusher"},
-  bodyweight: {"Back Squat":"Bulgarian Split Squat","Clean and Press":"Pike Push-Up","Romanian Deadlift":"Single-Leg Hip Hinge","Bench Press":"Push-Up","Front Squat":"Tempo Split Squat","Pull-Ups":"Towel Row / Doorframe Row","Dips":"Bench Dip","Lateral Raise":"Prone Y Raise","Rear Delt Fly":"Prone T Raise","Rope Pushdown":"Close-Grip Push-Up","Overhead Triceps Extension":"Bodyweight Triceps Extension","Skull Crusher":"Bodyweight Triceps Extension"}
+  hotel: { "Back Squat": "Goblet Squat", "Front Squat": "DB Front Squat", "Bench Press": "DB Bench Press", "Clean and Press": "DB Clean and Press", "Romanian Deadlift": "DB Romanian Deadlift", "Pull-Ups": "Lat Pulldown / Assisted Pull-Up", "Dips": "Bench Dips" },
+  dumbbells: { "Back Squat": "Goblet Squat", "Front Squat": "Goblet Squat", "Bench Press": "DB Floor Press", "Clean and Press": "DB Clean and Press", "Romanian Deadlift": "DB Romanian Deadlift", "Pull-Ups": "One-Arm DB Row", "Dips": "Close-Grip Push-Up" },
+  bodyweight: { "Back Squat": "Bulgarian Split Squat", "Front Squat": "Split Squat", "Bench Press": "Push-Up", "Clean and Press": "Pike Push-Up", "Romanian Deadlift": "Single-Leg Hip Hinge", "Pull-Ups": "Doorway Row / Towel Row", "Dips": "Bench Dip" }
 };
 
-const defaultWeek = [
-  { dow:1, day:"Mon", plan:"Workout A", detail:"Lift + 15–20 Zone 2" },
-  { dow:2, day:"Tue", plan:"Run", detail:"20–30 Zone 2" },
-  { dow:3, day:"Wed", plan:"Workout B", detail:"Lift + 15–20 Zone 2" },
-  { dow:4, day:"Thu", plan:"Run", detail:"20–30 Zone 2" },
-  { dow:5, day:"Fri", plan:"Workout A", detail:"Alternate A/B + 15–20 Zone 2" },
-  { dow:6, day:"Sat", plan:"Rest", detail:"Walk, family, mobility" },
-  { dow:0, day:"Sun", plan:"Rest", detail:"Check-in + recovery" },
-];
+function localISO(d = new Date()) { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
+function addDays(date, days) { const d = new Date(date + "T12:00:00"); d.setDate(d.getDate() + days); return localISO(d); }
+function startOfWeekISO(date = new Date()) { const d = new Date(date); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); return localISO(d); }
+function prettyDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }); }
+function defaultWeeklyPlan() { const start = startOfWeekISO(); return ["Workout A","Zone 2","Workout B","Zone 2", programSettings.current_week % 2 === 1 ? "Workout A" : "Workout B", "Recovery", "Recovery"].map((plan,i)=>({ date:addDays(start,i), plan, status:"planned", locked:false })); }
+function planDetails(plan) { if (plan === "Workout A") return "Squat/Clean & Press + arms + 15–20 Zone 2"; if (plan === "Workout B") return "Bench/Front Squat/Pull-ups/Dips + arms + Zone 2"; if (plan === "Zone 2") return "20–30 min conversational pace"; if (plan === "Minimum Viable") return "Rushed/travel workout"; return "Walking, mobility, family"; }
+function toast(msg, isError=false) { els.toast.textContent = msg; els.toast.style.background = isError ? "#ff3b30" : "#1c1c1e"; els.toast.classList.remove("hidden"); clearTimeout(window.toastTimer); window.toastTimer = setTimeout(()=>els.toast.classList.add("hidden"), 2800); }
+function showMessage(el, msg, isError=false) { if (!el) return; el.textContent = msg; el.style.color = isError ? "#ff3b30" : "#1c1c1e"; }
+function setLoggedIn(isIn) { els.authView.classList.toggle("hidden", isIn); els.appView.classList.toggle("hidden", !isIn); els.bottomNav.classList.toggle("hidden", !isIn); els.logoutBtn.classList.toggle("hidden", !isIn); }
+function showPanel(panelId) { document.querySelectorAll(".panel").forEach(p=>p.classList.add("hidden")); $(panelId).classList.remove("hidden"); document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.panel===panelId)); window.scrollTo({top:0, behavior:"instant"}); }
 
-const cycleInfo = {
-  1:{type:"Build",title:"Week 1 — Establish",text:"Use clean working weights. RPE 7–8."},2:{type:"Build",title:"Week 2 — Add",text:"Add only when reps are owned."},3:{type:"Build",title:"Week 3 — Push",text:"Hardest build week. No grinding."},4:{type:"Deload",title:"Week 4 — Deload",text:"~80% load and 2 working sets."},5:{type:"Build",title:"Week 5 — Rebuild",text:"Second build wave."},6:{type:"Build",title:"Week 6 — Add",text:"Progress only when reps are owned."},7:{type:"Build",title:"Week 7 — Peak",text:"Strongest build week."},8:{type:"Deload",title:"Week 8 — Deload",text:"Reduce weight and volume."}
-};
-
-function localDateISO(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
-function parseLocalDate(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d); }
-function addDaysISO(iso,days){ const d=parseLocalDate(iso); d.setDate(d.getDate()+days); return localDateISO(d); }
-function todayISO(){ return localDateISO(new Date()); }
-function weekStartISO(ref = new Date()){ const d = new Date(ref); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate()+diff); return localDateISO(d); }
-function getCycleWeek(){ return Number(programState?.active_week || 1); }
-function isDeloadWeek(){ return [4,8].includes(getCycleWeek()); }
-function nextCycleWeek(w){ return w >= 8 ? 1 : w + 1; }
-function isLift(p){ return p === "Workout A" || p === "Workout B"; }
-function showMessage(el,msg,isError=false){ el.textContent=msg; el.style.color=isError?"#ff3b30":"#1c1c1e"; }
-function setLoggedIn(loggedIn){ els.authView.classList.toggle("hidden", loggedIn); els.appView.classList.toggle("hidden", !loggedIn); els.logoutBtn.classList.toggle("hidden", !loggedIn); els.bottomNav.classList.toggle("hidden", !loggedIn); }
-function displayDate(iso){ return parseLocalDate(iso).toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"}); }
-function detailFor(plan){ if(plan==="Workout A")return "Compound-first lower/press + arms/shoulders + 15–20 Zone 2."; if(plan==="Workout B")return "Bench/front squat/pull-ups/dips + arms/shoulders + 15–20 Zone 2."; if(plan==="Run")return "20–30 minutes Zone 2. Complete it; pace does not matter."; return "Recovery, walking, family time."; }
-function statusLabel(row){ if(row.is_locked || row.status==="complete") return "Complete"; if(row.status==="rest") return "Rest"; if(row.status==="modified") return "Modified"; if(row.status==="skipped") return "Skipped"; return "Planned"; }
-function getActivePlan(row){ return row.actual_workout || row.planned_workout; }
-
-function getTemplates(){
-  if(equipmentMode === "full") return baseTemplates;
-  const map = substitutions[equipmentMode] || {};
-  const cloned = JSON.parse(JSON.stringify(baseTemplates));
-  Object.keys(cloned).forEach(k => cloned[k].forEach(ex => { if(map[ex.name]){ ex.originalName = ex.name; ex.name = map[ex.name]; ex.note = `${ex.note} · Travel substitute for ${ex.originalName}.`; }}));
-  return cloned;
+function recommendationFromReadiness() {
+  const soreness = $("soreness").value;
+  const time = Number($("availableTime").value || 60);
+  const stress = Number($("stress").value || 0);
+  const battery = Number($("bodyBattery").value || 100);
+  const assigned = getAssignedToday();
+  if (time <= 20) return { plan: "Minimum Viable", reason: "Available time is short. Keep the streak alive." };
+  if (soreness === "High" || stress >= 70 || battery < 35) return { plan: "Zone 2", reason: "Recovery is limited. Build aerobic base without digging a hole." };
+  return { plan: assigned || "Workout A", reason: "Default plan fits today’s readiness." };
 }
+function getAssignedToday() { const today = localISO(); return (weekSchedule.find(d=>d.date===today)?.plan) || defaultWeeklyPlan().find(d=>d.date===today)?.plan || "Workout A"; }
+function updateTodayUI() { const rec = recommendationFromReadiness(); const assigned = getAssignedToday() || rec.plan; els.dateLine.textContent = prettyDate(localISO()); els.todayWorkoutName.textContent = assigned; els.todayWorkoutDetails.textContent = planDetails(assigned); els.recommendationTitle.textContent = rec.plan; els.recommendationReason.textContent = rec.reason; els.cycleRing.textContent = programSettings.current_week || 1; document.querySelectorAll(".plan-btn").forEach(b=>b.classList.toggle("active", b.dataset.plan===assigned)); }
 
-async function ensureWeekPlan(){
-  const start = weekStartISO();
-  const existing = await supabaseClient.from("daily_schedule").select("*").eq("user_id", currentUser.id).eq("week_start", start).order("workout_date");
-  if(existing.error) throw existing.error;
-  if(existing.data && existing.data.length >= 7){ currentWeekPlan = existing.data; return; }
-  const rows = defaultWeek.map((x,i)=>({ user_id:currentUser.id, week_start:start, workout_date:addDaysISO(start,i), planned_workout:x.plan, actual_workout:null, status:"planned", is_locked:false, is_manual_override:false }));
-  await supabaseClient.from("daily_schedule").upsert(rows,{onConflict:"user_id,workout_date"});
-  const fresh = await supabaseClient.from("daily_schedule").select("*").eq("user_id", currentUser.id).eq("week_start", start).order("workout_date");
-  currentWeekPlan = fresh.data || [];
-}
-async function loadWeekPlan(){ await ensureWeekPlan(); }
-
-async function changeDayPlan(dateISO, newPlan, rebalance=true){
-  const row = currentWeekPlan.find(x=>x.workout_date===dateISO);
-  if(!row) return;
-  if(row.is_locked || row.status === "complete") return showMessage(els.swapMessage,"That day is locked because it was completed.",true);
-  const newStatus = newPlan === "Rest" ? "rest" : "modified";
-  await supabaseClient.from("daily_schedule").upsert({
-    user_id:currentUser.id, week_start:weekStartISO(), workout_date:dateISO,
-    planned_workout:newPlan, actual_workout:newPlan, status:newStatus, is_locked:false, is_manual_override:true
-  },{onConflict:"user_id,workout_date"});
-  if(rebalance) await rebalanceWeekAfter(dateISO);
-  await loadWeekPlan();
-  selectedDate = dateISO;
-  selectedPlan = newPlan;
-  renderAll();
-  showMessage(els.swapMessage, `${displayDate(dateISO)} changed to ${newPlan}. Week rebalanced.`);
-}
-async function changeSelectedDay(plan){ await changeDayPlan(selectedDate, plan, true); }
-
-async function rebalanceWeekAfter(changedDate){
-  await loadWeekPlan();
-  const start = weekStartISO();
-  const today = todayISO();
-  const firstRebalanceDate = addDaysISO(changedDate, 1);
-  const futureRows = currentWeekPlan.filter(r => r.workout_date >= firstRebalanceDate && !r.is_locked && r.status !== "complete");
-  const fixedRows = currentWeekPlan.filter(r => !futureRows.some(f=>f.workout_date===r.workout_date));
-
-  const completedOrFixedPlans = fixedRows.map(r => getActivePlan(r));
-  const liftSeq = ["Workout A","Workout B","Workout A"];
-  const usedLifts = completedOrFixedPlans.filter(isLift);
-  let remainingLifts = liftSeq.filter((_,idx)=>idx >= usedLifts.length);
-  let remainingRuns = Math.max(0, 2 - completedOrFixedPlans.filter(p=>p==="Run").length);
-
-  const updates = [];
-  for(const row of futureRows){
-    const d = parseLocalDate(row.workout_date);
-    const dow = d.getDay();
-    let plan = "Rest";
-    if(dow >= 1 && dow <= 5){
-      if(remainingLifts.length && (dow === 1 || dow === 2 || dow === 3 || (remainingRuns === 0))) plan = remainingLifts.shift();
-      else if(remainingRuns > 0){ plan = "Run"; remainingRuns--; }
-      else if(remainingLifts.length) plan = remainingLifts.shift();
-    }
-    updates.push({ id:row.id, planned_workout:plan, actual_workout:null, status:"planned", is_manual_override:false });
+async function ensureWeekSchedule() {
+  const start = startOfWeekISO();
+  let { data, error } = await supabaseClient.from("daily_schedule").select("*").eq("user_id", currentUser.id).gte("workout_date", start).lte("workout_date", addDays(start, 6)).order("workout_date");
+  if (error || !data || data.length === 0) {
+    const rows = defaultWeeklyPlan().map(d=>({ user_id: currentUser.id, workout_date: d.date, planned_workout: d.plan, actual_workout: null, status: "planned", is_locked: false }));
+    await supabaseClient.from("daily_schedule").upsert(rows, { onConflict: "user_id,workout_date" });
+    ({ data } = await supabaseClient.from("daily_schedule").select("*").eq("user_id", currentUser.id).gte("workout_date", start).lte("workout_date", addDays(start, 6)).order("workout_date"));
   }
-  for(const u of updates){ await supabaseClient.from("daily_schedule").update(u).eq("id",u.id); }
+  weekSchedule = (data || []).map(r=>({ date: r.workout_date, plan: r.actual_workout || r.planned_workout, status: r.status, locked: r.is_locked }));
 }
 
-async function resetUnlockedWeek(){
-  const start=weekStartISO();
-  await loadWeekPlan();
-  const rows = currentWeekPlan.map((row,i)=>{
-    const def = defaultWeek[i];
-    if(row.is_locked || row.status === "complete") return null;
-    return {id:row.id, planned_workout:def.plan, actual_workout:null, status:"planned", is_manual_override:false};
-  }).filter(Boolean);
-  for(const r of rows){ await supabaseClient.from("daily_schedule").update(r).eq("id",r.id); }
-  await loadWeekPlan();
-  const todayRow=currentWeekPlan.find(x=>x.workout_date===todayISO()) || currentWeekPlan[0];
-  selectedDate=todayRow.workout_date; selectedPlan=getActivePlan(todayRow);
-  renderAll();
-  showMessage(els.swapMessage,"Unlocked days reset to the default week.");
+async function setDayPlan(date, plan, rebalance = true) {
+  const day = weekSchedule.find(d=>d.date===date);
+  if (day?.locked) return toast("That day is locked because a workout was saved.", true);
+  await supabaseClient.from("daily_schedule").upsert({ user_id: currentUser.id, workout_date: date, planned_workout: plan, actual_workout: plan, status: plan === "Recovery" ? "rest" : "planned", is_locked: false }, { onConflict: "user_id,workout_date" });
+  await ensureWeekSchedule();
+  if (rebalance) await rebalanceRemaining(date);
+  await refreshAll();
+  toast(`${prettyDate(date)} set to ${plan}`);
 }
 
-function renderToday(){
-  const row=currentWeekPlan.find(x=>x.workout_date===selectedDate) || currentWeekPlan.find(x=>x.workout_date===todayISO()) || currentWeekPlan[0];
-  if(!row) return;
-  selectedPlan = getActivePlan(row);
-  const wk=getCycleWeek();
-  els.todayDateLabel.textContent = row.workout_date===todayISO() ? `Today · ${displayDate(row.workout_date)}` : displayDate(row.workout_date);
-  els.todayTitle.textContent = selectedPlan;
-  els.todayDetails.textContent = detailFor(selectedPlan);
-  els.todayStatus.textContent = statusLabel(row);
-  els.changeHeading.textContent = `Change ${row.workout_date===todayISO()?"today":displayDate(row.workout_date)}`;
-  els.cycleRing.textContent=wk; els.cycleLabel.textContent=`Week ${wk}`; els.cycleType.textContent=cycleInfo[wk].type;
-  document.querySelectorAll(".swap-pill").forEach(b=>b.classList.toggle("active", b.dataset.plan===selectedPlan));
+async function rebalanceRemaining(anchorDate = localISO()) {
+  // Preserve completed/locked days; rebalance unlocked days from anchor forward to target 3 lift slots and 4 run exposures.
+  await ensureWeekSchedule();
+  const liftsDone = weekSchedule.filter(d=>d.locked && ["Workout A","Workout B","Minimum Viable"].includes(d.plan)).length;
+  const runsDone = weekSchedule.filter(d=>d.locked && ["Workout A","Workout B","Zone 2","Minimum Viable"].includes(d.plan)).length;
+  let remainingLiftNeed = Math.max(0, 3 - liftsDone);
+  let remainingRunNeed = Math.max(0, 4 - runsDone);
+  const rows = [];
+  let nextLift = "Workout A";
+  for (const d of weekSchedule) {
+    if (d.locked || d.date < anchorDate) continue;
+    let plan = d.plan;
+    if (d.date === anchorDate && d.plan !== "Recovery") { plan = d.plan; }
+    else if (remainingLiftNeed > 0) { plan = nextLift; nextLift = nextLift === "Workout A" ? "Workout B" : "Workout A"; }
+    else if (remainingRunNeed > 0) { plan = "Zone 2"; }
+    else { plan = "Recovery"; }
+    if (["Workout A","Workout B","Minimum Viable"].includes(plan)) remainingLiftNeed--;
+    if (["Workout A","Workout B","Zone 2","Minimum Viable"].includes(plan)) remainingRunNeed--;
+    rows.push({ user_id: currentUser.id, workout_date: d.date, planned_workout: plan, actual_workout: plan, status: plan === "Recovery" ? "rest" : "planned", is_locked: false });
+  }
+  if (rows.length) await supabaseClient.from("daily_schedule").upsert(rows, { onConflict: "user_id,workout_date" });
+  await ensureWeekSchedule();
 }
-function renderWeeklyPlan(){
-  els.weeklyPlan.innerHTML = currentWeekPlan.map(row=>{
-    const d=parseLocalDate(row.workout_date);
-    const day=d.toLocaleDateString(undefined,{weekday:"short"});
-    const plan=getActivePlan(row);
-    const selected=row.workout_date===selectedDate;
-    const today=row.workout_date===todayISO();
-    const locked=row.is_locked||row.status==="complete";
-    const tag=statusLabel(row);
-    const cls = tag.toLowerCase();
-    return `<article class="day-card ${selected?"selected":""} ${locked?"locked":""}" data-date="${row.workout_date}">
-      <div><strong>${day} · ${plan}</strong><span>${today?"Today · ":""}${detailFor(plan)}</span></div>
-      <div class="day-tag ${cls}">${locked?"✓ ":""}${tag}</div>
-    </article>`;
+
+function renderWeeklyPlan() {
+  const today = localISO();
+  els.weeklyPlanList.innerHTML = weekSchedule.map(d=>{
+    const cls = `${d.date===today ? "today" : ""} ${d.locked ? "complete" : ""} ${d.plan==="Recovery" ? "rest" : ""}`;
+    return `<article class="day-card ${cls}"><div><strong>${prettyDate(d.date)} · ${d.plan}</strong><span>${d.locked ? "Complete" : d.status || "planned"} · ${planDetails(d.plan)}</span></div><div class="day-actions">${!d.locked ? `<button data-change-day="${d.date}" data-plan="Workout A">A</button><button data-change-day="${d.date}" data-plan="Workout B">B</button><button data-change-day="${d.date}" data-plan="Zone 2">Z2</button><button data-change-day="${d.date}" data-plan="Recovery">Rest</button>` : "✓"}</div></article>`;
   }).join("");
 }
-function renderAll(){ renderToday(); renderWeeklyPlan(); renderWorkoutBuilder(); renderProgressShell(); renderCheckinCounts(); }
-function showPanel(panelId){ document.querySelectorAll(".panel").forEach(p=>p.classList.add("hidden")); id(panelId).classList.remove("hidden"); document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.panel===panelId)); window.scrollTo({top:0}); }
-
-function getBaselineWeight(name,fallback){ const row=baselines[name]; if(row && row.current_working_weight!==null && row.current_working_weight!==undefined) return row.current_working_weight; return fallback; }
-function targetRepsFromText(target){ if(!target) return 5; if(target.includes("15")) return 15; if(target.includes("12")) return 12; if(target.includes("10")) return 10; if(target.includes("8")) return 8; return 5; }
-function rowHtml(setIndex,ex){ const isRun=!!ex.isRun; const baseline=getBaselineWeight(ex.name,ex.defaultWeight); const repsDefault=isRun?"":targetRepsFromText(ex.target); const w=baseline===0?"0":(baseline||""); return `<div class="set-row" data-set-index="${setIndex}"><span class="set-num">${setIndex+1}</span><input class="set-weight" type="number" inputmode="decimal" step="2.5" placeholder="${isRun?"target":"lb"}" value="${w}" /><input class="set-reps" type="number" inputmode="numeric" placeholder="${isRun?"min":"reps"}" value="${isRun?"":repsDefault}" /><input class="set-rpe" type="number" inputmode="decimal" step="0.5" placeholder="RPE" /><button class="remove-set" type="button">×</button></div>`; }
-function renderWorkoutBuilder(){ const templates=getTemplates(); const plan=templates[selectedPlan]||templates["Workout A"]; els.planHeading.textContent=`${displayDate(selectedDate)} · ${selectedPlan}`; els.equipmentLabel.textContent=equipmentMode==="full"?"Full gym":`Travel mode: ${equipmentMode}`; els.workoutBuilder.innerHTML=plan.map((ex,i)=>`<article class="exercise-card" data-exercise-index="${i}" data-exercise-name="${ex.name}" data-is-run="${ex.isRun?"true":"false"}" data-target="${ex.target}" data-group="${ex.group||""}"><div class="exercise-head"><div class="exercise-name">${ex.name}</div><div class="exercise-note">${ex.note}</div><div><span class="badge">${ex.target}</span></div></div><div class="set-header"><span>Set</span><span>${ex.isRun?"Target":"Weight"}</span><span>${ex.isRun?"Done":"Reps"}</span><span>RPE</span><span></span></div><div class="sets-container">${Array.from({length:ex.sets}).map((_,idx)=>rowHtml(idx,ex)).join("")}</div><button class="copy-first-set" type="button">Copy set 1 to all</button><button class="add-set" type="button">+ Add set</button></article>`).join(""); bindRowHighlightListeners(); }
-function bindRowHighlightListeners(){ document.querySelectorAll(".set-row").forEach(row=>{ const evalRow=()=>{ const w=row.querySelector(".set-weight").value; const r=row.querySelector(".set-reps").value; row.classList.toggle("filled",!!w||!!r); }; evalRow(); row.querySelectorAll("input").forEach(input=>input.addEventListener("input",evalRow)); }); }
-function collectExerciseRows(){ const exercises=[]; document.querySelectorAll(".exercise-card").forEach(card=>{ const name=card.dataset.exerciseName; const isRun=card.dataset.isRun==="true"; const target=card.dataset.target || ""; const group=card.dataset.group || ""; const rows=[]; card.querySelectorAll(".set-row").forEach((row,idx)=>{ const weight=Number(row.querySelector(".set-weight").value||0); const reps=Number(row.querySelector(".set-reps").value||0); const rpe=Number(row.querySelector(".set-rpe").value||0); if(weight>0||reps>0||rpe>0) rows.push({set_number:idx+1,weight,reps,rpe}); }); if(rows.length) exercises.push({name,isRun,target,group,rows}); }); return exercises; }
-
-function progressionDecision(exerciseName, weight, repsArray, targetText="", group="") {
-  const lower = exerciseName.toLowerCase();
-  const targetReps = targetRepsFromText(targetText);
-  const hitAll = repsArray.length >= 2 && repsArray.every(r => r >= targetReps);
-  const lowerBody = lower.includes("squat") || lower.includes("deadlift");
-  const cleanPress = lower.includes("clean") && lower.includes("press");
-  const isMain = group === "main" || ["back squat","clean and press","bench press","front squat","pull-ups","dips","romanian deadlift"].some(n => lower.includes(n));
-
-  if (isDeloadWeek() && isMain) return { nextWeight: Math.round(weight * 0.8), decision: "Deload main lift: use ~80% and 2 working sets.", hitAll, isMain };
-  if (cleanPress) return hitAll ? { nextWeight: weight + 5, decision: "Clean & Press owned. Add 5 lb next exposure.", hitAll, isMain } : { nextWeight: weight, decision: "Clean & Press double progression: repeat this weight until all reps are owned.", hitAll, isMain };
-  if (isMain && hitAll) return { nextWeight: weight + (lowerBody ? 5 : 5), decision: `Main lift owned. Add ${lowerBody ? "5" : "2.5–5"} lb next exposure.`, hitAll, isMain };
-  if (isMain) return { nextWeight: weight, decision: "Main lift: repeat weight until target reps are owned.", hitAll, isMain };
-  if (hitAll) return { nextWeight: weight, decision: "Accessory owned. Keep quality high; add a small amount next time only if form stays clean.", hitAll, isMain };
-  return { nextWeight: weight, decision: "Accessory: repeat this load and own the reps. Do not force progression.", hitAll, isMain };
+function applyEquipment(ex) { const map = substitutions[equipmentMode] || {}; const subName = map[ex.name]; return subName ? { ...ex, name: subName, note: `${ex.name} substitute · ${ex.note}` } : ex; }
+function templateFor(plan) { return (baseTemplates[plan] || baseTemplates["Workout A"]).map(applyEquipment); }
+function baselineWeight(name, fallback) { const exact = baselines[name]; if (exact && exact.current_working_weight !== null && exact.current_working_weight !== undefined) return exact.current_working_weight; return fallback ?? ""; }
+function startWorkout(plan = null) { if (!currentUser) { localStorage.setItem("pendingAction", JSON.stringify({ type:"startWorkout", plan: plan || getAssignedToday() })); setLoggedIn(false); toast("Log in first. I’ll open the workout after login."); return; } currentWorkout = plan || getAssignedToday() || recommendationFromReadiness().plan; renderSession(currentWorkout); showPanel("sessionPanel"); }
+function renderSession(plan) { currentWorkout = plan; els.sessionTitle.textContent = plan; els.sessionSubtitle.textContent = planDetails(plan); document.querySelectorAll(".session-plan-btn").forEach(b=>b.classList.toggle("active", b.dataset.plan===plan)); const exercises = templateFor(plan); els.sessionExercises.innerHTML = exercises.map((ex,i)=>exerciseCard(ex,i)).join(""); bindSetInputs(); }
+function exerciseCard(ex, idx) { const rows = Array.from({length: ex.sets}).map((_,i)=>setRow(ex,i)).join(""); return `<article class="exercise-card" data-exercise-name="${ex.name}" data-exercise-type="${ex.type}"><div class="exercise-head"><div><div class="exercise-name">${ex.name}</div><div class="exercise-note">${ex.note}</div></div><span class="badge">${ex.target}</span></div><div class="set-header"><span>Set</span><span>${ex.type==="run" ? "Target" : "Weight"}</span><span>${ex.type==="run" ? "Done" : "Reps"}</span><span>RPE</span><span></span></div><div class="sets-container">${rows}</div><div class="exercise-actions"><button class="copy-first-set" type="button">Copy set 1</button><button class="add-set" type="button">+ Add set</button></div></article>`; }
+function setRow(ex, i) { const w = ex.type === "run" ? ex.defaultWeight : baselineWeight(ex.name, ex.defaultWeight); const reps = ex.type === "run" ? "" : ex.reps; return `<div class="set-row"><span class="set-num">${i+1}</span><input class="set-weight" type="number" inputmode="decimal" step="2.5" placeholder="${ex.type==="run" ? "min" : "lb"}" value="${w || w===0 ? w : ""}" /><input class="set-reps" type="number" inputmode="decimal" step="0.01" placeholder="${ex.type==="run" ? "done" : "reps"}" value="${reps || ""}" /><input class="set-rpe" type="number" inputmode="decimal" step="0.5" placeholder="RPE" /><button class="remove-set" type="button">×</button></div>`; }
+function bindSetInputs() { document.querySelectorAll(".set-row").forEach(row=>{ const evalRow=()=>{ const vals=[...row.querySelectorAll("input")].map(i=>i.value).join(""); row.classList.toggle("filled", !!vals); }; evalRow(); row.querySelectorAll("input").forEach(i=>i.addEventListener("input", evalRow)); }); }
+function collectSession() { const out=[]; document.querySelectorAll(".exercise-card").forEach(card=>{ const rows=[]; card.querySelectorAll(".set-row").forEach((row,i)=>{ const weight=Number(row.querySelector(".set-weight").value || 0); const reps=Number(row.querySelector(".set-reps").value || 0); const rpe=Number(row.querySelector(".set-rpe").value || 0); if (weight || reps || rpe) rows.push({ set_number:i+1, weight, reps, rpe }); }); if (rows.length) out.push({ name: card.dataset.exerciseName, type: card.dataset.exerciseType, rows }); }); return out; }
+function progressionDecision(name, weight, repsArray, type) { if (type === "accessory") return { nextWeight: weight, decision: "Accessory: repeat or add reps before adding load.", miss: 0 }; const hitAll = repsArray.length >= 3 && repsArray.every(r=>r >= 5); const lower = name.toLowerCase(); if (programSettings.current_week === 4 || programSettings.current_week === 8) return { nextWeight: Math.round(weight*0.8), decision: "Deload: use ~80% and 2 working sets.", miss: 0 }; if (lower.includes("clean") && lower.includes("press")) return hitAll ? { nextWeight: weight+5, decision: "Clean & Press owned. Add 5 lb.", miss: 0 } : { nextWeight: weight, decision: "Repeat until 5/5/5.", miss: 1 }; if (hitAll) return { nextWeight: weight + 5, decision: "All reps hit. Add 5 lb next exposure.", miss: 0 }; return { nextWeight: weight, decision: "Repeat weight until target reps are owned.", miss: 1 }; }
+async function finishWorkout() {
+  if (!currentUser) return startWorkout(currentWorkout);
+  const rows = collectSession(); const notes = $("sessionNotes").value || ""; const distance = Number($("runDistance").value || 0);
+  if (!rows.length && !notes.trim()) return showMessage(els.sessionMessage, "Track at least one set or add notes before saving.", true);
+  const { data: workout, error } = await supabaseClient.from("workout_logs").insert({ user_id: currentUser.id, date: localISO(), workout_type: currentWorkout, cycle_week: programSettings.current_week, is_deload: [4,8].includes(Number(programSettings.current_week)), notes }).select().single();
+  if (error) return showMessage(els.sessionMessage, error.message, true);
+  const setRows=[]; const runRows=[];
+  rows.forEach(ex=>{ if (ex.type === "run") { const r=ex.rows[0]; runRows.push({ user_id: currentUser.id, date: localISO(), run_type: ex.name, target_minutes: r.weight || 0, completed_minutes: r.reps || 0, rpe: r.rpe || 0, notes: distance ? `Distance: ${distance} mi · ${notes}` : notes }); } else { ex.rows.forEach(r=>setRows.push({ workout_log_id: workout.id, exercise_name: ex.name, weight: r.weight, reps: Math.round(r.reps), set_number: r.set_number, rpe: r.rpe, completed: true })); }});
+  if (setRows.length) { const { error:e } = await supabaseClient.from("exercise_sets").insert(setRows); if (e) return showMessage(els.sessionMessage, e.message, true); }
+  if (runRows.length) { const { error:e } = await supabaseClient.from("run_logs").insert(runRows); if (e) return showMessage(els.sessionMessage, e.message, true); }
+  for (const ex of rows.filter(x=>x.type !== "run")) { const usable = ex.rows.filter(r=>r.reps > 0); const last = usable[usable.length-1]; if (!last) continue; const decision = progressionDecision(ex.name, last.weight, usable.map(r=>r.reps), ex.type); const existing = baselines[ex.name] || {}; let missCount = decision.miss ? (existing.miss_count || 0) + 1 : 0; let nextWeight = decision.nextWeight; let nextDecision = decision.decision; if (missCount >= 2 && ex.type === "lift") { nextWeight = Math.round(last.weight * 0.9); nextDecision = "Missed twice: reduce load about 10% and rebuild."; missCount = 0; } await supabaseClient.from("lift_baselines").upsert({ user_id: currentUser.id, exercise_name: ex.name, current_working_weight: nextWeight, target_sets: 3, target_reps: 5, last_result: `${last.weight} x ${usable.map(r=>r.reps).join(",")}`, miss_count: missCount, next_decision: nextDecision, updated_at: new Date().toISOString() }, { onConflict: "user_id,exercise_name" }); }
+  await supabaseClient.from("daily_schedule").upsert({ user_id: currentUser.id, workout_date: localISO(), planned_workout: currentWorkout, actual_workout: currentWorkout, status: "complete", is_locked: true }, { onConflict: "user_id,workout_date" });
+  await maybeAdvanceProgramWeek();
+  toast("Workout saved."); showMessage(els.sessionMessage, "Saved. Progress and week schedule updated."); await refreshAll(); showPanel("todayPanel");
 }
-async function saveWorkout(){
-  const scheduleRow = currentWeekPlan.find(x=>x.workout_date===selectedDate);
-  if(scheduleRow?.is_locked || scheduleRow?.status==="complete") return showMessage(els.workoutMessage,"This day is already complete and locked.",true);
-  const exercises=collectExerciseRows(); const notes=id("workoutNotes").value;
-  if(!exercises.length && !notes.trim()) return showMessage(els.workoutMessage,"Enter at least one set or notes.",true);
-  const {data:workout,error:workoutError}=await supabaseClient.from("workout_logs").insert({user_id:currentUser.id,date:selectedDate,workout_type:selectedPlan,cycle_week:getCycleWeek(),is_deload:isDeloadWeek(),notes}).select().single();
-  if(workoutError) return showMessage(els.workoutMessage,workoutError.message,true);
-  const setRows=[],runRows=[];
-  exercises.forEach(ex=>{ if(ex.isRun){ const first=ex.rows[0]; runRows.push({user_id:currentUser.id,date:selectedDate,run_type:ex.name,target_minutes:first.weight||0,completed_minutes:first.reps||0,rpe:first.rpe||0,notes:`${selectedPlan} · ${notes||""}`}); } else { ex.rows.forEach(row=>setRows.push({workout_log_id:workout.id,exercise_name:ex.name,weight:row.weight,reps:row.reps,set_number:row.set_number,rpe:row.rpe,completed:true})); }});
-  if(setRows.length){ const {error}=await supabaseClient.from("exercise_sets").insert(setRows); if(error) return showMessage(els.workoutMessage,error.message,true); }
-  if(runRows.length){ const {error}=await supabaseClient.from("run_logs").insert(runRows); if(error) return showMessage(els.workoutMessage,error.message,true); }
-  for(const ex of exercises.filter(e=>!e.isRun)){ const usable=ex.rows.filter(r=>r.reps>0); if(!usable.length) continue; const weight=usable[usable.length-1].weight; const repsArray=usable.map(r=>r.reps); const {nextWeight,decision,hitAll,isMain}=progressionDecision(ex.name,weight,repsArray,ex.target,ex.group); const existing=baselines[ex.name]; let missCount=hitAll?0:((existing?.miss_count||0)+1); let finalNextWeight=nextWeight, finalDecision=decision; if(isMain && !hitAll && missCount>=2 && !isDeloadWeek()){ finalNextWeight=Math.round(weight*.9); finalDecision="Missed twice: reduce load about 10% and rebuild."; missCount=0; } await supabaseClient.from("lift_baselines").upsert({user_id:currentUser.id,exercise_name:ex.name,current_working_weight:finalNextWeight,target_sets:3,target_reps:5,last_result:`${weight} x ${repsArray.join(",")}`,miss_count:missCount,next_decision:finalDecision,updated_at:new Date().toISOString()},{onConflict:"user_id,exercise_name"}); }
-  await supabaseClient.from("daily_schedule").update({actual_workout:selectedPlan,status:"complete",is_locked:true}).eq("user_id",currentUser.id).eq("workout_date",selectedDate);
-  const advanced = await maybeAdvanceProgramWeek(selectedPlan);
-  showMessage(els.workoutMessage, advanced ? "Saved. Day locked. You logged enough lifts, so the program advanced to the next week." : "Saved. Day marked complete and locked.");
-  await loadWeekPlan(); await loadProgress(); await loadHistory(); await renderCheckinCounts(); renderAll(); renderProgramControls(); renderV2Spec();
+async function maybeAdvanceProgramWeek() { if (!["Workout A","Workout B","Minimum Viable"].includes(currentWorkout)) return; if (programSettings.advance_after_lifts === "manual") return; const needed = Number(programSettings.advance_after_lifts || 3); const count = Number(programSettings.lift_count_this_program_week || 0) + 1; let week = Number(programSettings.current_week || 1); let newCount = count; if (count >= needed) { week = week >= 8 ? 1 : week + 1; newCount = 0; } await saveProgramSettings(week, programSettings.advance_after_lifts, newCount, false); }
+async function loadProgress() { const { data, error } = await supabaseClient.from("lift_baselines").select("*").eq("user_id", currentUser.id).order("updated_at", { ascending:false }); if (error) { els.progressList.innerHTML = `<p class="muted">${error.message}</p>`; return; } baselines={}; (data||[]).forEach(r=>baselines[r.exercise_name]=r); els.progressList.innerHTML = (data&&data.length) ? data.map(r=>`<article class="progress-item"><strong>${r.exercise_name}</strong><div>Next target: ${r.current_working_weight ?? 0} lb</div><div class="muted small">Last: ${r.last_result || "—"} · Misses: ${r.miss_count || 0}</div><div class="progress-decision">${r.next_decision || "Repeat until owned."}</div></article>`).join("") : `<p class="muted">No baselines yet. Finish a workout to start tracking.</p>`; }
+async function loadCheckinCounts() { const start=startOfWeekISO(); const end=addDays(start,6); const { data:w } = await supabaseClient.from("workout_logs").select("workout_type").eq("user_id", currentUser.id).gte("date", start).lte("date", end); const { data:r } = await supabaseClient.from("run_logs").select("id").eq("user_id", currentUser.id).gte("date", start).lte("date", end); const lifts=(w||[]).filter(x=>["Workout A","Workout B","Minimum Viable"].includes(x.workout_type)).length; const runs=(r||[]).length + (w||[]).filter(x=>["Workout A","Workout B"].includes(x.workout_type)).length; els.liftsAuto.textContent = `${lifts}/3`; els.runsAuto.textContent = `${runs}/4`; }
+async function saveCheckin() { const { error } = await supabaseClient.from("weekly_checkins").insert({ user_id: currentUser.id, week_start: startOfWeekISO(), body_weight: Number($("bodyWeight").value || 0), waist: Number($("waist").value || 0), arm_measurement: Number($("armMeasurement").value || 0), zone2_pace: $("zone2Pace").value || null, lifts_completed: Number((els.liftsAuto.textContent||"0").split("/")[0]), runs_completed: Number((els.runsAuto.textContent||"0").split("/")[0]), protein_rating: $("proteinRating").value, recovery_rating: $("recoveryRating").value, notes: $("checkinNotes").value }); if (error) showMessage(els.checkinMessage, error.message, true); else showMessage(els.checkinMessage, "Check-in saved."); }
+async function loadPreferences() { const { data } = await supabaseClient.from("user_preferences").select("*").eq("user_id", currentUser.id).maybeSingle(); if (data) { equipmentMode = data.equipment_mode || "full"; programSettings.current_week = data.current_week || 1; programSettings.advance_after_lifts = data.advance_after_lifts || "3"; programSettings.lift_count_this_program_week = data.lift_count_this_program_week || 0; } els.equipmentMode.value=equipmentMode; els.programWeek.value=String(programSettings.current_week); els.advanceAfterLifts.value=String(programSettings.advance_after_lifts); }
+async function saveEquipment() { equipmentMode = els.equipmentMode.value; await supabaseClient.from("user_preferences").upsert({ user_id: currentUser.id, equipment_mode: equipmentMode, current_week: programSettings.current_week, advance_after_lifts: programSettings.advance_after_lifts, lift_count_this_program_week: programSettings.lift_count_this_program_week, updated_at: new Date().toISOString() }, { onConflict: "user_id" }); toast("Equipment saved."); renderSession(currentWorkout); }
+async function saveProgramSettings(week=null, advance=null, liftCount=null, show=true) { programSettings.current_week = Number(week || els.programWeek.value || 1); programSettings.advance_after_lifts = advance || els.advanceAfterLifts.value || "3"; programSettings.lift_count_this_program_week = liftCount ?? programSettings.lift_count_this_program_week ?? 0; await supabaseClient.from("user_preferences").upsert({ user_id: currentUser.id, equipment_mode: equipmentMode, current_week: programSettings.current_week, advance_after_lifts: programSettings.advance_after_lifts, lift_count_this_program_week: programSettings.lift_count_this_program_week, updated_at: new Date().toISOString() }, { onConflict: "user_id" }); if (show) toast("Program settings saved."); }
+async function signUp() { const email=$("email").value.trim(); const password=$("password").value; if (!email || !password) return showMessage(els.authMessage,"Enter email and password.",true); const { error } = await supabaseClient.auth.signUp({ email, password }); if (error) showMessage(els.authMessage,error.message,true); else showMessage(els.authMessage,"Account created. Log in."); }
+async function signIn() { const email=$("email").value.trim(); const password=$("password").value; if (!email || !password) return showMessage(els.authMessage,"Enter email and password.",true); const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password }); if (error) return showMessage(els.authMessage,error.message,true); currentUser=data.user; setLoggedIn(true); await bootApp(); const pending = localStorage.getItem("pendingAction"); if (pending) { localStorage.removeItem("pendingAction"); try { const action=JSON.parse(pending); if (action.type==="startWorkout") startWorkout(action.plan); } catch { startWorkout(); } } }
+async function signOut() { await supabaseClient.auth.signOut(); currentUser=null; setLoggedIn(false); }
+async function refreshAll() { await ensureWeekSchedule(); renderWeeklyPlan(); updateTodayUI(); await loadProgress(); await loadCheckinCounts(); }
+async function bootApp() { await loadPreferences(); await refreshAll(); renderSession(getAssignedToday()); }
+function wireEvents() {
+  $("signupBtn").addEventListener("click", signUp); $("loginBtn").addEventListener("click", signIn); $("logoutBtn").addEventListener("click", signOut); $("startTodayBtn").addEventListener("click", ()=>startWorkout(getAssignedToday() || recommendationFromReadiness().plan)); $("updateRecommendationBtn").addEventListener("click", updateTodayUI); $("rebalanceWeekBtn").addEventListener("click", async()=>{ await rebalanceRemaining(localISO()); await refreshAll(); toast("Week rebalanced."); });
+  document.querySelectorAll(".plan-btn").forEach(b=>b.addEventListener("click", async()=>{ await setDayPlan(localISO(), b.dataset.plan, true); }));
+  document.querySelectorAll(".session-plan-btn").forEach(b=>b.addEventListener("click", ()=>renderSession(b.dataset.plan)));
+  document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click", ()=>showPanel(b.dataset.panel)));
+  $("finishWorkoutBtn").addEventListener("click", finishWorkout); $("saveCheckinBtn").addEventListener("click", saveCheckin); $("saveEquipmentBtn").addEventListener("click", saveEquipment); $("saveProgramBtn").addEventListener("click", ()=>saveProgramSettings());
+  els.weeklyPlanList.addEventListener("click", async(e)=>{ const btn=e.target.closest("button[data-change-day]"); if (!btn) return; await setDayPlan(btn.dataset.changeDay, btn.dataset.plan, true); });
+  els.sessionExercises.addEventListener("click", e=>{ const card=e.target.closest(".exercise-card"); if (!card) return; if (e.target.classList.contains("add-set")) { const name=card.dataset.exerciseName; const type=card.dataset.exerciseType; const container=card.querySelector(".sets-container"); const ex={ name, type, reps:type==="run"?"":10, defaultWeight:"" }; container.insertAdjacentHTML("beforeend", setRow(ex, container.children.length)); [...container.children].forEach((r,i)=>r.querySelector(".set-num").textContent=i+1); bindSetInputs(); }
+    if (e.target.classList.contains("remove-set")) { const row=e.target.closest(".set-row"); const container=row.parentElement; if (container.children.length>1) row.remove(); [...container.children].forEach((r,i)=>r.querySelector(".set-num").textContent=i+1); }
+    if (e.target.classList.contains("copy-first-set")) { const rows=[...card.querySelectorAll(".set-row")]; if (!rows.length) return; const first=rows[0]; const vals=[...first.querySelectorAll("input")].map(i=>i.value); rows.slice(1).forEach(r=>[...r.querySelectorAll("input")].forEach((inp,i)=>inp.value=vals[i])); bindSetInputs(); toast("Set 1 copied."); }
+  });
 }
-
-async function loadProgress(){ const {data,error}=await supabaseClient.from("lift_baselines").select("*").eq("user_id",currentUser.id).order("updated_at",{ascending:false}); if(error){ els.progressList.innerHTML=`<p class="muted">${error.message}</p>`; return; } baselines={}; (data||[]).forEach(row=>baselines[row.exercise_name]=row); renderProgressShell(); }
-function renderProgressShell(){ const data=Object.values(baselines); els.progressList.innerHTML=data.length?data.map(row=>`<article class="progress-item"><strong>${row.exercise_name}</strong><div>Next target: ${row.current_working_weight??0} lb</div><div class="muted small">Last: ${row.last_result||"—"} · Misses: ${row.miss_count||0}</div><div class="progress-decision">${row.next_decision||"Repeat until owned."}</div></article>`).join(""):`<p class="muted">No lift baselines yet. Log a workout to start.</p>`; }
-async function loadHistory(){ const [workouts,runs]=await Promise.all([supabaseClient.from("workout_logs").select("*").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(10),supabaseClient.from("run_logs").select("*").eq("user_id",currentUser.id).order("created_at",{ascending:false}).limit(5)]); const workoutHtml=(workouts.data||[]).map(row=>`<article class="history-item"><strong>${row.date} · ${row.workout_type}</strong><span class="muted small">Week ${row.cycle_week} ${row.is_deload?"· Deload":"· Build"}</span><p class="muted small">${row.notes||""}</p></article>`).join(""); const runHtml=(runs.data||[]).map(row=>`<article class="history-item"><strong>${row.date} · ${row.run_type}</strong><span class="muted small">${row.completed_minutes||0}/${row.target_minutes||0} min · RPE ${row.rpe||"—"}</span></article>`).join(""); els.historyList.innerHTML=workoutHtml+runHtml||`<p class="muted">No history yet.</p>`; }
-async function renderCheckinCounts(){ if(!currentUser) return; const start=weekStartISO(); const end=addDaysISO(start,7); const [sched,runs]=await Promise.all([supabaseClient.from("daily_schedule").select("*").eq("user_id",currentUser.id).eq("week_start",start),supabaseClient.from("run_logs").select("*").eq("user_id",currentUser.id).gte("date",start).lt("date",end)]); const completePlans=(sched.data||[]).filter(x=>x.status==="complete").map(x=>x.actual_workout||x.planned_workout); const lifts=completePlans.filter(isLift).length; const runFromSchedule=completePlans.filter(x=>x==="Run").length; const runFromLogs=(runs.data||[]).filter(x=>(x.completed_minutes||0)>0).length; const totalRuns=Math.max(runFromSchedule,runFromLogs); els.autoLifts.textContent=`${lifts}/3`; els.autoRuns.textContent=`${totalRuns}/4`; return {lifts,runs:totalRuns}; }
-
-async function loadProgramState(){
-  const {data,error}=await supabaseClient.from("program_state").select("*").eq("user_id",currentUser.id).maybeSingle();
-  if(error){ console.warn(error.message); }
-  if(data){
-    programState = data;
-  } else {
-    const fresh = {user_id:currentUser.id, active_week:1, advance_mode:"completed_lifts", lifts_required:3, week_started_at:new Date().toISOString(), updated_at:new Date().toISOString()};
-    const res = await supabaseClient.from("program_state").upsert(fresh,{onConflict:"user_id"}).select().single();
-    programState = res.data || fresh;
-  }
-  renderProgramControls();
-}
-function renderProgramControls(){
-  if(!els.programStatus) return;
-  const mode = programState.advance_mode || "completed_lifts";
-  const required = Number(programState.lifts_required || 3);
-  const started = programState.week_started_at ? new Date(programState.week_started_at).toLocaleDateString() : "today";
-  els.programStatus.textContent = `Current program week: ${getCycleWeek()} · ${cycleInfo[getCycleWeek()].type} · advances after ${required} completed lifts · started ${started}`;
-  if(els.programWeekSelect) els.programWeekSelect.value = String(getCycleWeek());
-  if(els.advanceMode) els.advanceMode.value = mode;
-  if(els.liftsRequired) els.liftsRequired.value = required;
-}
-function renderV2Spec(){
-  const missionEl = id("v2Mission");
-  if(!missionEl) return;
-  missionEl.innerHTML = `<article class="info-card"><h3>${v2Mission.title}</h3><p class="muted small">${v2Mission.mission}</p><div class="progress-decision">Non-negotiables: ${v2Mission.nonNegotiables.join(" · ")}</div></article>`;
-}
-async function saveProgramSettings(){
-  const activeWeek = Number(els.programWeekSelect.value || getCycleWeek());
-  const payload = { user_id:currentUser.id, active_week:activeWeek, advance_mode:els.advanceMode.value, lifts_required:Number(els.liftsRequired.value||3), week_started_at:new Date().toISOString(), updated_at:new Date().toISOString() };
-  const {data,error}=await supabaseClient.from("program_state").upsert(payload,{onConflict:"user_id"}).select().single();
-  if(error) return showMessage(els.programMessage,error.message,true);
-  programState = data || payload;
-  renderAll(); renderProgramControls(); renderV2Spec();
-  showMessage(els.programMessage,`Program reset to Week ${getCycleWeek()}. Future workouts will use this period.`);
-}
-async function advanceProgramWeek(){
-  const payload = { user_id:currentUser.id, active_week:nextCycleWeek(getCycleWeek()), week_started_at:new Date().toISOString(), updated_at:new Date().toISOString() };
-  const {data,error}=await supabaseClient.from("program_state").upsert({...programState,...payload},{onConflict:"user_id"}).select().single();
-  if(error) return showMessage(els.programMessage,error.message,true);
-  programState = data || {...programState,...payload};
-  renderAll(); renderProgramControls(); renderV2Spec();
-  showMessage(els.programMessage,`Advanced to Week ${getCycleWeek()}.`);
-}
-async function maybeAdvanceProgramWeek(savedWorkoutType){
-  if(!isLift(savedWorkoutType)) return false;
-  if((programState.advance_mode || "completed_lifts") !== "completed_lifts") return false;
-  const required = Number(programState.lifts_required || 3);
-  const started = programState.week_started_at || new Date(0).toISOString();
-  const wk = getCycleWeek();
-  const {data,error}=await supabaseClient.from("workout_logs")
-    .select("id,workout_type,created_at")
-    .eq("user_id",currentUser.id)
-    .eq("cycle_week",wk)
-    .in("workout_type",["Workout A","Workout B"])
-    .gte("created_at",started);
-  if(error){ console.warn(error.message); return false; }
-  if((data||[]).length >= required){
-    const oldWeek = wk;
-    const payload = { user_id:currentUser.id, active_week:nextCycleWeek(oldWeek), week_started_at:new Date().toISOString(), updated_at:new Date().toISOString() };
-    const res=await supabaseClient.from("program_state").upsert({...programState,...payload},{onConflict:"user_id"}).select().single();
-    programState = res.data || {...programState,...payload};
-    return true;
-  }
-  return false;
-}
-
-async function saveCheckin(){ const counts=await renderCheckinCounts(); const {error}=await supabaseClient.from("weekly_checkins").insert({user_id:currentUser.id,week_start:weekStartISO(),body_weight:Number(id("bodyWeight").value||0),waist:Number(id("waist").value||0),lifts_completed:counts?.lifts||0,runs_completed:counts?.runs||0,protein_rating:id("proteinRating").value,recovery_rating:id("recoveryRating").value,notes:id("checkinNotes").value, arm_measurement:Number(id("armMeasurement")?.value||0), zone2_pace:id("zone2Pace")?.value||null, front_photo_note:id("frontPhotoNote")?.value||null, side_photo_note:id("sidePhotoNote")?.value||null}); if(error) return showMessage(els.checkinMessage,error.message,true); showMessage(els.checkinMessage,"Check-in saved."); }
-async function loadPrefs(){ const {data}=await supabaseClient.from("user_preferences").select("*").eq("user_id",currentUser.id).maybeSingle(); equipmentMode=data?.equipment_mode||"full"; els.equipmentMode.value=equipmentMode; }
-async function savePrefs(){ equipmentMode=els.equipmentMode.value; await supabaseClient.from("user_preferences").upsert({user_id:currentUser.id,equipment_mode:equipmentMode,updated_at:new Date().toISOString()},{onConflict:"user_id"}); showMessage(els.prefsMessage,"Equipment saved."); renderAll(); }
-async function signUp(){ const email=id("email").value.trim(); const password=id("password").value; if(!email||!password) return showMessage(els.authMessage,"Enter email and password.",true); const {error}=await supabaseClient.auth.signUp({email,password}); showMessage(els.authMessage,error?error.message:"Account created. Log in.",!!error); }
-async function signIn(){ const email=id("email").value.trim(); const password=id("password").value; if(!email||!password) return showMessage(els.authMessage,"Enter email and password.",true); const {data,error}=await supabaseClient.auth.signInWithPassword({email,password}); if(error) return showMessage(els.authMessage,error.message,true); currentUser=data.user; setLoggedIn(true); await bootApp(); }
-async function signOut(){ await supabaseClient.auth.signOut(); currentUser=null; setLoggedIn(false); }
-function setupEvents(){
-  id("signupBtn").addEventListener("click",signUp); id("loginBtn").addEventListener("click",signIn); id("logoutBtn").addEventListener("click",signOut); id("startWorkoutBtn").addEventListener("click",()=>showPanel("workoutPanel")); id("saveWorkoutBtn").addEventListener("click",saveWorkout); id("saveCheckinBtn").addEventListener("click",saveCheckin); id("savePrefsBtn").addEventListener("click",savePrefs); id("saveProgramBtn").addEventListener("click",saveProgramSettings); id("advanceProgramBtn").addEventListener("click",advanceProgramWeek); id("resetWeekBtn").addEventListener("click",resetUnlockedWeek);
-  document.querySelectorAll(".swap-pill").forEach(btn=>btn.addEventListener("click",()=>changeSelectedDay(btn.dataset.plan)));
-  document.querySelectorAll(".nav-item").forEach(btn=>btn.addEventListener("click",()=>showPanel(btn.dataset.panel)));
-  els.weeklyPlan.addEventListener("click",e=>{ const card=e.target.closest(".day-card"); if(!card) return; selectedDate=card.dataset.date; const row=currentWeekPlan.find(x=>x.workout_date===selectedDate); selectedPlan=getActivePlan(row); renderAll(); showPanel("todayPanel"); });
-  els.workoutBuilder.addEventListener("click",e=>{ if(e.target.classList.contains("add-set")){ const card=e.target.closest(".exercise-card"); const templates=getTemplates(); const ex=Object.values(templates).flat().find(x=>x.name===card.dataset.exerciseName)||{name:card.dataset.exerciseName,isRun:card.dataset.isRun==="true",defaultWeight:""}; const container=card.querySelector(".sets-container"); container.insertAdjacentHTML("beforeend",rowHtml(container.children.length,ex)); bindRowHighlightListeners(); } if(e.target.classList.contains("copy-first-set")){ const card=e.target.closest(".exercise-card"); const rows=[...card.querySelectorAll(".set-row")]; if(rows.length){ const first=rows[0]; const vals=[first.querySelector(".set-weight").value, first.querySelector(".set-reps").value, first.querySelector(".set-rpe").value]; rows.slice(1).forEach(row=>{ row.querySelector(".set-weight").value=vals[0]; row.querySelector(".set-reps").value=vals[1]; row.querySelector(".set-rpe").value=vals[2]; row.classList.toggle("filled",!!vals[0]||!!vals[1]); }); }} if(e.target.classList.contains("remove-set")){ const row=e.target.closest(".set-row"); const container=row.parentElement; if(container.children.length>1) row.remove(); [...container.children].forEach((child,index)=>child.querySelector(".set-num").textContent=index+1); } });
-}
-async function bootApp(){ await loadProgramState(); renderV2Spec(); await loadPrefs(); await loadWeekPlan(); await loadProgress(); const todayRow=currentWeekPlan.find(x=>x.workout_date===todayISO()) || currentWeekPlan[0]; selectedDate=todayRow.workout_date; selectedPlan=getActivePlan(todayRow); renderAll(); await loadHistory(); showPanel("todayPanel"); }
-async function init(){ setupEvents(); if(!appConfigured){ els.setupWarning.classList.remove("hidden"); return; } const {data}=await supabaseClient.auth.getUser(); if(data.user){ currentUser=data.user; setLoggedIn(true); await bootApp(); } else { setLoggedIn(false); } }
+async function init() { wireEvents(); els.dateLine.textContent=prettyDate(localISO()); if (!appConfigured) { els.setupWarning.classList.remove("hidden"); setLoggedIn(false); return; } const { data } = await supabaseClient.auth.getUser(); if (data.user) { currentUser=data.user; setLoggedIn(true); await bootApp(); if (pendingAction) { localStorage.removeItem("pendingAction"); pendingAction=null; startWorkout(); } } else { setLoggedIn(false); updateTodayUI(); } }
+window.addEventListener("error", (e)=>{ console.error(e.error || e.message); toast("Something broke. Check console for details.", true); });
 init();

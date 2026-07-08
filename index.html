@@ -1,180 +1,190 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Hybrid OS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Hybrid Log</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <div id="toast" class="toast hidden"></div>
+
   <main class="app-shell">
     <header class="topbar">
       <div>
-        <h1>Hybrid OS</h1>
-        <p class="muted">Hybrid Athlete OS V2.0</p>
+        <p class="eyebrow">Hybrid Athlete OS V2.0</p>
+        <h1>Hybrid Log</h1>
       </div>
-      <button id="logoutBtn" class="ghost hidden">Log out</button>
+      <button id="logoutBtn" class="ghost hidden" type="button">Log out</button>
     </header>
 
-    <section id="setupWarning" class="notice hidden">Supabase is not configured. Add your project URL and anon key to app.js.</section>
+    <section id="setupWarning" class="notice hidden">
+      Supabase is not configured. Add your project URL and anon key in app.js.
+    </section>
 
     <section id="authView" class="auth-card hidden">
       <h2>Log in</h2>
-      <p class="muted small">Your workouts save to Supabase.</p>
-      <label>Email</label><input id="email" type="email" placeholder="you@email.com" autocomplete="email" />
-      <label>Password</label><input id="password" type="password" placeholder="Password" autocomplete="current-password" />
-      <button id="loginBtn" class="primary">Log in</button>
-      <button id="signupBtn" class="secondary">Create account</button>
-      <p id="authMessage" class="small"></p>
+      <p class="muted">Sign in once. Then Start Today will open your workout directly.</p>
+      <label>Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@email.com" />
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Password" />
+      <button id="loginBtn" class="primary" type="button">Log in</button>
+      <button id="signupBtn" class="secondary" type="button">Create account</button>
+      <p id="authMessage" class="message"></p>
     </section>
 
     <section id="appView" class="hidden">
       <section id="todayPanel" class="panel">
-        <article class="today-card">
-          <div class="today-kicker" id="todayDateLabel">Today</div>
-          <div class="today-main-row">
-            <div>
-              <h2 id="todayTitle">Workout A</h2>
-              <p id="todayDetails" class="muted">Loading plan...</p>
-            </div>
-            <div class="cycle-bubble"><span id="cycleRing">1</span></div>
+        <div class="date-line" id="dateLine">Today</div>
+        <section class="hero-card">
+          <div>
+            <p class="eyebrow">Today</p>
+            <h2 id="todayWorkoutName">Loading...</h2>
+            <p id="todayWorkoutDetails" class="muted">Preparing your plan.</p>
           </div>
-          <div class="today-meta">
-            <span id="cycleLabel">Week 1</span>
-            <span id="cycleType">Build</span>
-            <span id="todayStatus">Planned</span>
-          </div>
-          <button id="startWorkoutBtn" class="primary">Start selected day</button>
-        </article>
-
-        <div id="v2Mission"></div>
-
-        <article class="swap-card">
-          <div class="section-title-row compact-row">
-            <div>
-              <h3 id="changeHeading">Change selected day</h3>
-              <p class="muted small">You can edit any uncompleted day, including yesterday. Completed days are locked.</p>
-            </div>
-          </div>
-          <div class="quick-switch">
-            <button class="swap-pill" data-plan="Workout A">Workout A</button>
-            <button class="swap-pill" data-plan="Workout B">Workout B</button>
-            <button class="swap-pill" data-plan="Run">Run</button>
-            <button class="swap-pill" data-plan="Rest">Rest</button>
-          </div>
-          <p id="swapMessage" class="small"></p>
-        </article>
-
-        <section class="section-title-row">
-          <h2>This week</h2>
-          <button id="resetWeekBtn" class="ghost">Reset unlocked</button>
+          <div class="ring" id="cycleRing">1</div>
         </section>
-        <div id="weeklyPlan" class="weekly-plan"></div>
+
+        <section class="readiness-card">
+          <div class="section-title-row tight">
+            <h3>Readiness</h3>
+            <span class="muted small">Optional</span>
+          </div>
+          <div class="input-grid two">
+            <div><label>Sleep score</label><input id="sleepScore" type="number" inputmode="numeric" placeholder="88" /></div>
+            <div><label>HRV</label><input id="hrv" type="number" inputmode="numeric" placeholder="55" /></div>
+            <div><label>Body battery</label><input id="bodyBattery" type="number" inputmode="numeric" placeholder="73" /></div>
+            <div><label>Stress</label><input id="stress" type="number" inputmode="numeric" placeholder="28" /></div>
+            <div><label>Soreness</label><select id="soreness"><option>Low</option><option>Medium</option><option>High</option></select></div>
+            <div><label>Time</label><select id="availableTime"><option value="60">45–60 min</option><option value="35">30–40 min</option><option value="20">20 min</option></select></div>
+          </div>
+          <button id="updateRecommendationBtn" class="secondary" type="button">Update recommendation</button>
+        </section>
+
+        <section class="action-card">
+          <p class="eyebrow">Recommended</p>
+          <h3 id="recommendationTitle">Workout A</h3>
+          <p id="recommendationReason" class="muted small">Default weekly structure.</p>
+          <button id="startTodayBtn" class="primary large" type="button">Start Today’s Workout</button>
+        </section>
+
+        <section class="picker-card">
+          <h3>Need to switch?</h3>
+          <div class="workout-picker">
+            <button class="plan-btn" data-plan="Workout A" type="button">Workout A</button>
+            <button class="plan-btn" data-plan="Workout B" type="button">Workout B</button>
+            <button class="plan-btn" data-plan="Zone 2" type="button">Zone 2</button>
+            <button class="plan-btn" data-plan="Recovery" type="button">Recovery</button>
+          </div>
+        </section>
+
+        <section class="weekly-card">
+          <div class="section-title-row tight">
+            <h3>This week</h3>
+            <button id="rebalanceWeekBtn" class="ghost" type="button">Rebalance</button>
+          </div>
+          <div id="weeklyPlanList" class="weekly-plan"></div>
+        </section>
       </section>
 
-      <section id="workoutPanel" class="panel hidden">
-        <div class="sticky-save">
-          <h2 id="planHeading">Workout</h2>
-          <p id="equipmentLabel" class="muted small">Full gym</p>
+      <section id="sessionPanel" class="panel hidden">
+        <div class="session-header sticky-save">
+          <div>
+            <p class="eyebrow">Session</p>
+            <h2 id="sessionTitle">Workout</h2>
+            <p id="sessionSubtitle" class="muted small">Track what you actually do.</p>
+          </div>
+          <button id="finishWorkoutBtn" class="primary compact" type="button">Finish</button>
         </div>
-        <div id="workoutBuilder"></div>
-        <label>Workout notes</label>
-        <textarea id="workoutNotes" placeholder="How did it feel?"></textarea>
-        <button id="saveWorkoutBtn" class="primary">Save + lock day complete</button>
-        <p id="workoutMessage" class="small"></p>
+
+        <section class="picker-card">
+          <h3>Switch workout</h3>
+          <div class="workout-picker">
+            <button class="session-plan-btn" data-plan="Workout A" type="button">A</button>
+            <button class="session-plan-btn" data-plan="Workout B" type="button">B</button>
+            <button class="session-plan-btn" data-plan="Zone 2" type="button">Zone 2</button>
+            <button class="session-plan-btn" data-plan="Recovery" type="button">Recovery</button>
+            <button class="session-plan-btn" data-plan="Minimum Viable" type="button">Minimum</button>
+          </div>
+        </section>
+
+        <section id="sessionExercises"></section>
+
+        <section class="notes-card">
+          <label>Run distance</label>
+          <input id="runDistance" type="number" inputmode="decimal" step="0.01" placeholder="Miles, optional" />
+          <label>Notes</label>
+          <textarea id="sessionNotes" placeholder="How did it feel? Travel? Rushed? Any substitutions?"></textarea>
+        </section>
+        <p id="sessionMessage" class="message"></p>
       </section>
 
       <section id="progressPanel" class="panel hidden">
         <h2>Progress</h2>
-        <p class="muted small">Next targets update after each saved workout.</p>
+        <p class="muted">Next targets update after completed sessions.</p>
         <div id="progressList"></div>
       </section>
 
       <section id="checkinPanel" class="panel hidden">
-        <h2>Check-in</h2>
-        <p class="muted small">Lift/run totals are calculated from completed schedule + saved workouts this week.</p>
+        <h2>Sunday Check-in</h2>
         <div class="mini-grid two">
-          <article class="mini-card"><p class="metric-label">Lifts</p><h3 id="autoLifts">0/3</h3></article>
-          <article class="mini-card"><p class="metric-label">Runs</p><h3 id="autoRuns">0/4</h3></article>
+          <div class="mini-card"><p class="metric-label">Lifts</p><strong id="liftsAuto">0/3</strong></div>
+          <div class="mini-card"><p class="metric-label">Runs</p><strong id="runsAuto">0/4</strong></div>
         </div>
         <div class="input-grid two">
           <div><label>Body weight</label><input id="bodyWeight" type="number" step="0.1" /></div>
-          <div><label>Waist</label><input id="waist" type="number" step="0.1" /></div>
+          <div><label>Waist</label><input id="waist" type="number" step="0.25" /></div>
+          <div><label>Arm flexed</label><input id="armMeasurement" type="number" step="0.25" /></div>
+          <div><label>Zone 2 pace</label><input id="zone2Pace" placeholder="e.g. 12:15/mi" /></div>
         </div>
-        <div class="input-grid two">
-          <div><label>Arm measurement</label><input id="armMeasurement" type="number" step="0.1" placeholder="flexed" /></div>
-          <div><label>Zone 2 pace</label><input id="zone2Pace" type="text" placeholder="ex: 12:30/mi" /></div>
-        </div>
-        <label>Front photo note</label><input id="frontPhotoNote" type="text" placeholder="Saved in Photos / optional note" />
-        <label>Side photo note</label><input id="sidePhotoNote" type="text" placeholder="Saved in Photos / optional note" />
         <label>Protein</label><select id="proteinRating"><option>Good</option><option>OK</option><option>Bad</option></select>
         <label>Recovery</label><select id="recoveryRating"><option>Good</option><option>OK</option><option>Bad</option></select>
         <label>Notes</label><textarea id="checkinNotes"></textarea>
-        <button id="saveCheckinBtn" class="primary">Save check-in</button>
-        <p id="checkinMessage" class="small"></p>
+        <button id="saveCheckinBtn" class="primary" type="button">Save check-in</button>
+        <p id="checkinMessage" class="message"></p>
       </section>
 
       <section id="profilePanel" class="panel hidden">
         <h2>Profile</h2>
-        <article class="info-card">
-          <h3>V2.0 rules</h3>
-          <p class="muted small">Commit for 12–16 weeks. Compounds first, Zone 2 non-negotiable, direct arm/shoulder work programmed every lift.</p>
-          <div class="progress-decision">Never miss Zone 2 · Never skip direct arms · Always progress compounds</div>
-        </article>
-        <p class="muted small">Use equipment mode for travel weeks.</p>
-        <label>Available equipment</label>
-        <select id="equipmentMode">
-          <option value="full">Full gym</option>
-          <option value="hotel">Hotel gym</option>
-          <option value="dumbbells">Dumbbells only</option>
-          <option value="bodyweight">Bodyweight</option>
-        </select>
-        <button id="savePrefsBtn" class="primary">Save equipment</button>
-        <p id="prefsMessage" class="small"></p>
-
-        <div class="profile-divider"></div>
-        <h2>Program period</h2>
-        <p class="muted small">The cycle no longer advances just because calendar weeks pass. It advances only when you log enough lift workouts, or when you manually reset it here.</p>
-        <article class="info-card">
-          <p id="programStatus" class="small">Loading program status...</p>
-        </article>
-        <label>Current program week</label>
-        <select id="programWeekSelect">
-          <option value="1">Week 1 — Establish</option>
-          <option value="2">Week 2 — Add</option>
-          <option value="3">Week 3 — Push</option>
-          <option value="4">Week 4 — Deload</option>
-          <option value="5">Week 5 — Rebuild</option>
-          <option value="6">Week 6 — Add</option>
-          <option value="7">Week 7 — Peak</option>
-          <option value="8">Week 8 — Deload</option>
-        </select>
-        <label>Advance rule</label>
-        <select id="advanceMode">
-          <option value="completed_lifts">Advance after enough completed lifts</option>
-          <option value="manual">Manual only</option>
-        </select>
-        <label>Lifts required to advance</label>
-        <input id="liftsRequired" type="number" min="1" max="5" value="3" />
-        <button id="saveProgramBtn" class="primary">Reset / save program week</button>
-        <button id="advanceProgramBtn" class="secondary">Advance one week now</button>
-        <p id="programMessage" class="small"></p>
-      </section>
-
-      <section id="historyPanel" class="panel hidden">
-        <h2>History</h2>
-        <div id="historyList"></div>
+        <section class="info-card">
+          <h3>Operating System V2.0</h3>
+          <ul class="compact-list">
+            <li>Never miss Zone 2.</li>
+            <li>Never skip direct arm work.</li>
+            <li>Progress the compound lifts.</li>
+          </ul>
+        </section>
+        <section class="info-card">
+          <h3>Equipment</h3>
+          <select id="equipmentMode">
+            <option value="full">Full gym</option>
+            <option value="hotel">Hotel gym</option>
+            <option value="dumbbells">Dumbbells only</option>
+            <option value="bodyweight">Bodyweight</option>
+          </select>
+          <button id="saveEquipmentBtn" class="secondary" type="button">Save equipment</button>
+        </section>
+        <section class="info-card">
+          <h3>Program progression</h3>
+          <p class="muted small">Program week advances only after enough completed lift sessions, not just calendar time.</p>
+          <div class="input-grid two">
+            <div><label>Current week</label><select id="programWeek"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></div>
+            <div><label>Advance after lifts</label><select id="advanceAfterLifts"><option value="3">3</option><option value="2">2</option><option value="manual">Manual</option></select></div>
+          </div>
+          <button id="saveProgramBtn" class="secondary" type="button">Save program settings</button>
+        </section>
       </section>
     </section>
   </main>
 
-  <nav class="bottom-nav hidden" id="bottomNav">
-    <button class="nav-item active" data-panel="todayPanel"><span>⌂</span>Home</button>
-    <button class="nav-item" data-panel="workoutPanel"><span>＋</span>Workout</button>
-    <button class="nav-item" data-panel="progressPanel"><span>▥</span>Progress</button>
-    <button class="nav-item" data-panel="checkinPanel"><span>✓</span>Check-in</button>
-    <button class="nav-item" data-panel="profilePanel"><span>⚙</span>Profile</button>
+  <nav id="bottomNav" class="bottom-nav hidden">
+    <button class="nav-item active" data-panel="todayPanel" type="button"><span>⌂</span>Today</button>
+    <button class="nav-item" data-panel="sessionPanel" type="button"><span>＋</span>Workout</button>
+    <button class="nav-item" data-panel="progressPanel" type="button"><span>↗</span>Progress</button>
+    <button class="nav-item" data-panel="checkinPanel" type="button"><span>✓</span>Check-in</button>
+    <button class="nav-item" data-panel="profilePanel" type="button"><span>⚙</span>Profile</button>
   </nav>
 
   <script src="app.js"></script>
