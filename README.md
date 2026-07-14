@@ -16,11 +16,13 @@ A clean rebuild of your hybrid athlete training app using GitHub Pages + Supabas
 - Finish Workout saves the session, locks the day, and updates lift progression
 - Button loading/success states and toast feedback
 - Program week is manual/workout-based, not calendar-based
+- Each account owns its own program: build one by hand in-app, or import one (see `docs/PROGRAM_IMPORT.md`) — someone else's ChatGPT plan or a screenshot of another program, converted to JSON via Claude, pastes straight in
 
 ## Install
 
-1. In Supabase SQL Editor, run:
-   `sql/001_reset_and_schema.sql`
+1. In Supabase SQL Editor, run, in order:
+   - `sql/001_reset_and_schema.sql`
+   - `sql/002_programs.sql` (adds user-authored programs + RLS for the new tables)
 
 2. Upload these files/folders to GitHub:
    - `index.html`

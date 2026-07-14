@@ -1,12 +1,24 @@
-export function progressionDecision(name, weight, repsArray, isDeload=false){
-  const lower = name.toLowerCase();
-  const target = lower.includes('curl') || lower.includes('raise') || lower.includes('pushdown') || lower.includes('extension') || lower.includes('skull') ? 12 : 5;
-  const hit = repsArray.length>=2 && repsArray.every(r=>Number(r)>=target);
-  const lowerBody = lower.includes('squat') || lower.includes('deadlift') || lower.includes('rdl');
-  const clean = lower.includes('clean') && lower.includes('press');
-  const accessory = target===12;
-  if(isDeload) return {nextWeight: Math.round(Number(weight)*0.8), decision:'Deload: use ~80% and fewer sets.', hit};
-  if(accessory){ return hit ? {nextWeight:Number(weight)+5, decision:'Accessory owned. Add small load or reps next time.', hit} : {nextWeight:Number(weight), decision:'Repeat accessory load until quality sets are owned.', hit}; }
-  if(clean){ return hit ? {nextWeight:Number(weight)+5, decision:'Clean & Press owned. Add 5 lb.', hit} : {nextWeight:Number(weight), decision:'Repeat until 5/5/5 is owned.', hit}; }
-  return hit ? {nextWeight:Number(weight)+(lowerBody?5:5), decision:`All reps hit. Add ${lowerBody?'5':'2.5–5'} lb.`, hit} : {nextWeight:Number(weight), decision:'Repeat weight until target reps are owned.', hit};
+// Generalized so it works for any exercise from any program — not just the ones whose
+// names it recognizes. Reads the target rep count and increment straight off the
+// program's own exercise data instead of guessing from the exercise name.
+//
+// Also implements the rule the spec always stated but never actually ran:
+// two consecutive misses on the same lift -> drop the working weight 10%.
+
+function round5(n){ return Math.round(n/2.5)*2.5; }
+
+export function progressionDecision({ weight, repsArray, targetReps=8, increment=5, isDeload=false, priorMissCount=0 }){
+  const hit = repsArray.length>0 && repsArray.every(r=>Number(r)>=targetReps);
+
+  if(isDeload){
+    return { nextWeight: round5(Number(weight)*0.8), decision:'Deload week: ~80% load, fewer sets.', hit, missCount:0 };
+  }
+  if(hit){
+    return { nextWeight: Number(weight)+increment, decision:`All sets hit ${targetReps}+. Add ${increment} lb next time.`, hit, missCount:0 };
+  }
+  const newMissCount = priorMissCount+1;
+  if(newMissCount>=2){
+    return { nextWeight: round5(Number(weight)*0.9), decision:'Missed twice in a row — reduced 10% to rebuild.', hit, missCount:0 };
+  }
+  return { nextWeight:Number(weight), decision:'Repeat this weight until target reps are owned.', hit, missCount:newMissCount };
 }
