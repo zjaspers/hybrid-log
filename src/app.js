@@ -1,9 +1,9 @@
 import { supabase } from './supabase.js';
-import * as db from './services/db.js';
+import * as db from './services/db.js?v=211';
 import { toast, withButtonState } from './components/toast.js';
 import { localISO, startOfWeekISO, dayLabel, haptic } from './utils.js';
 import { programDisplay, programPlans, workoutMeta, getWorkout, recommendedFromReadiness } from './engines/workoutEngine.js';
-import { rebalance, todayPlan } from './engines/scheduleEngine.js';
+import { rebalance, todayPlan } from './engines/scheduleEngine.js?v=211';
 import { progressionDecision } from './engines/progressionEngine.js';
 
 const app = document.getElementById('app');

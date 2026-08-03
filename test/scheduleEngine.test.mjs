@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWeek, rebuildWeek, rebalance } from '../src/engines/scheduleEngine.js';
+import { buildWeek, rebuildWeek, hasStaleUnlockedDays, rebalance } from '../src/engines/scheduleEngine.js';
 
 const program = {
   week_template: ['upper_a','lower_a','zone2_medium','upper_b','lower_b','zone2_optional','rest'],
@@ -24,6 +24,15 @@ test('rebuildWeek preserves completed rows', ()=>{
   const rebuilt = rebuildWeek(program, '2026-08-03', stale);
   assert.equal(rebuilt[0].planned_workout, 'legacy_lift');
   assert.deepEqual(rebuilt.slice(1).map(x=>x.planned_workout), program.week_template.slice(1));
+});
+
+test('stale imported-program rows are detected without replacing completed work', ()=>{
+  const stale = buildWeek(program, '2026-08-03');
+  stale[0] = {...stale[0], planned_workout:'legacy_lift', actual_workout:'legacy_lift', status:'complete', locked:true};
+  stale[1] = {...stale[1], planned_workout:'legacy_run'};
+  assert.equal(hasStaleUnlockedDays(program, stale), true);
+  stale[1] = {...stale[1], planned_workout:'lower_a'};
+  assert.equal(hasStaleUnlockedDays(program, stale), false);
 });
 
 test('rebalance retains four lift days and both run variants, including Saturday', ()=>{

@@ -1,6 +1,6 @@
 import { supabase } from '../supabase.js';
 import { localISO, startOfWeekISO } from '../utils.js';
-import { buildWeek, rebuildWeek } from '../engines/scheduleEngine.js';
+import { buildWeek, rebuildWeek, hasStaleUnlockedDays } from '../engines/scheduleEngine.js?v=211';
 import { DEFAULT_PROGRAM } from '../data/defaultProgram.js';
 
 export async function getUser(){ const {data} = await supabase.auth.getUser(); return data.user; }
@@ -20,6 +20,11 @@ export async function getWeekSchedule(user_id, program, week_start=startOfWeekIS
   const {data,error}=await supabase.from('daily_schedule').select('*').eq('user_id',user_id).gte('workout_date',week[0].workout_date).lte('workout_date',week[6].workout_date).order('workout_date');
   if(error) throw error;
   const existing = data || [];
+  if(hasStaleUnlockedDays(program, existing)){
+    const rebuilt = rebuildWeek(program, week_start, existing);
+    await replaceWeekSchedule(user_id, rebuilt, week_start);
+    return rebuilt;
+  }
   const missing = week.filter(d=>!existing.some(x=>x.workout_date===d.workout_date)).map(d=>({user_id,week_start,...d}));
   if(missing.length){ const ins=await supabase.from('daily_schedule').insert(missing); if(ins.error) throw ins.error; return getWeekSchedule(user_id,program,week_start); }
   return existing;

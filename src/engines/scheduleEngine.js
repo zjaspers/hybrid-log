@@ -12,6 +12,12 @@ export function rebuildWeek(program, startISO, existing=[]){
     return prior && (prior.locked || prior.status==='complete') ? prior : day;
   });
 }
+export function hasStaleUnlockedDays(program, existing=[]){
+  const validKeys = new Set((program.workouts||[]).map(workout=>workout.key));
+  return existing.some(day=>
+    !day.locked && day.status!=='complete' && !validKeys.has(day.planned_workout)
+  );
+}
 export function todayPlan(schedule){
   const today = localISO();
   return schedule.find(x=>x.workout_date===today) || null;
