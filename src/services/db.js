@@ -1,6 +1,6 @@
 import { supabase } from '../supabase.js';
 import { localISO, startOfWeekISO } from '../utils.js';
-import { buildWeek } from '../engines/scheduleEngine.js';
+import { buildWeek, rebuildWeek } from '../engines/scheduleEngine.js';
 import { DEFAULT_PROGRAM } from '../data/defaultProgram.js';
 
 export async function getUser(){ const {data} = await supabase.auth.getUser(); return data.user; }
@@ -27,6 +27,14 @@ export async function getWeekSchedule(user_id, program, week_start=startOfWeekIS
 export async function replaceWeekSchedule(user_id, schedule, week_start=startOfWeekISO()){
   const rows=schedule.map(r=>({user_id,week_start,workout_date:r.workout_date,planned_workout:r.planned_workout,actual_workout:r.actual_workout,status:r.status,locked:!!r.locked}));
   const {error}=await supabase.from('daily_schedule').upsert(rows,{onConflict:'user_id,workout_date'}); if(error) throw error;
+}
+export async function rebuildCurrentWeek(user_id, program, week_start=startOfWeekISO()){
+  const expected = buildWeek(program, week_start);
+  const {data,error}=await supabase.from('daily_schedule').select('*').eq('user_id',user_id).gte('workout_date',expected[0].workout_date).lte('workout_date',expected[6].workout_date).order('workout_date');
+  if(error) throw error;
+  const schedule = rebuildWeek(program, week_start, data||[]);
+  await replaceWeekSchedule(user_id, schedule, week_start);
+  return schedule;
 }
 export async function saveReadiness(user_id, values){
   const {error}=await supabase.from('readiness_logs').upsert({user_id,readiness_date:localISO(),...values},{onConflict:'user_id,readiness_date'}); if(error) throw error;
@@ -83,7 +91,9 @@ export async function importProgram(user_id, programJson, source='import'){
   }).select().single();
   if(error) throw error;
   await writeWorkouts(program.id, programJson.workouts||[]);
-  return getActiveProgram(user_id);
+  const activeProgram = await getActiveProgram(user_id);
+  await rebuildCurrentWeek(user_id, activeProgram);
+  return activeProgram;
 }
 export async function replaceProgramContent(program_id, workouts, week_template, name){
   const patch = {updated_at:new Date().toISOString()};
@@ -92,6 +102,11 @@ export async function replaceProgramContent(program_id, workouts, week_template,
   const {error:pe}=await supabase.from('programs').update(patch).eq('id',program_id); if(pe) throw pe;
   await supabase.from('program_workouts').delete().eq('program_id',program_id);
   await writeWorkouts(program_id, workouts);
+  const {data:program,error}=await supabase.from('programs').select('*').eq('id',program_id).single();
+  if(error) throw error;
+  const {data:workoutRows,error:e2}=await supabase.from('program_workouts').select('*, program_exercises(*)').eq('program_id',program_id).order('sort_order');
+  if(e2) throw e2;
+  await rebuildCurrentWeek(program.user_id, normalizeProgramRow(program, workoutRows));
 }
 async function writeWorkouts(program_id, workouts){
   for(let i=0;i<workouts.length;i++){
